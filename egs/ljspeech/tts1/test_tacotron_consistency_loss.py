@@ -128,5 +128,6 @@ if __name__ == '__main__':
         model=tacotron2,
         use_masking=args.use_masking,
         bce_pos_weight=args.bce_pos_weight)
-    loss = model_loss(*batch)
-    print(loss)
+
+    # Compute loss
+    print(model_loss(*batch))
