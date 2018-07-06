@@ -222,6 +222,17 @@ def train(args):
     e2e = E2E(idim, odim, args)
     model = Loss(e2e, args.mtlalpha)
 
+    if args.tts_model:
+        from e2e_tts_th import TacotronRewardLoss
+        # Read model
+        with open(args.tts_model, 'rb') as f:
+            idim, odim, train_args = pickle.load(f)
+        tts_model = TacotronRewardLoss(
+            idim=idim,
+            odim=odim,
+            train_args=train_args
+        )
+
     # write model config
     if not os.path.exists(args.outdir):
         os.makedirs(args.outdir)

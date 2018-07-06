@@ -72,6 +72,8 @@ def main():
     parser.add_argument('--ctc_type', default='warpctc', type=str,
                         choices=['chainer', 'warpctc'],
                         help='Type of CTC implementation to calculate loss.')
+    parser.add_argument('--tts-model',
+                        help='TTS model for cycle-consistency loss')
     # attention
     parser.add_argument('--atype', default='dot', type=str,
                         choices=['noatt', 'dot', 'add', 'location', 'coverage',

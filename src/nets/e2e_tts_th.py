@@ -798,3 +798,61 @@ class Decoder(torch.nn.Module):
             for l in six.moves.range(self.postnet_layers):
                 xs = self.postnet[l](xs)
         return xs
+
+
+def TacotronRewardLoss(idim=None, odim=None, train_args=None,
+                       use_masking=False, bce_pos_weight=20.0):
+
+    # define output activation function
+    if hasattr(train_args, 'output_activation'):
+        if train_args.output_activation is None:
+            output_activation_fn = None
+        elif hasattr(torch.nn.functional, train_args.output_activation):
+            output_activation_fn = getattr(
+                torch.nn.functional, train_args.output_activation
+            )
+        else:
+            raise ValueError(
+                'there is no such an activation function. (%s)' %
+                train_args.output_activation
+            )
+    else:
+        output_activation_fn = None
+
+    # TACOTRON CYCLE-CONSISTENT LOSS HERE
+    # Define model
+    tacotron2 = Tacotron2(
+        idim=idim,
+        odim=odim,
+        embed_dim=train_args.embed_dim,
+        elayers=train_args.elayers,
+        eunits=train_args.eunits,
+        econv_layers=train_args.econv_layers,
+        econv_chans=train_args.econv_chans,
+        econv_filts=train_args.econv_filts,
+        dlayers=train_args.dlayers,
+        dunits=train_args.dunits,
+        prenet_layers=train_args.prenet_layers,
+        prenet_units=train_args.prenet_units,
+        postnet_layers=train_args.postnet_layers,
+        postnet_chans=train_args.postnet_chans,
+        postnet_filts=train_args.postnet_filts,
+        adim=train_args.adim,
+        aconv_chans=train_args.aconv_chans,
+        aconv_filts=train_args.aconv_filts,
+        output_activation_fn=output_activation_fn,
+        cumulate_att_w=train_args.cumulate_att_w,
+        use_batch_norm=train_args.use_batch_norm,
+        use_concate=train_args.use_concate,
+        dropout=train_args.dropout_rate,
+        zoneout=train_args.zoneout_rate,
+    )
+
+    # Define loss
+    model_loss = Tacotron2Loss(
+        model=tacotron2,
+        use_masking=use_masking,
+        bce_pos_weight=bce_pos_weight
+    )
+
+    return model_loss
