@@ -18,6 +18,12 @@ verbose=1      # verbose option
 resume=        # Resume the training from snapshot
 
 # feature configuration
+fs=16000       # sampling frequency
+fmax=""        # maximum frequency
+fmin=""        # minimum frequency
+n_mels=80      # number of mel basis
+n_fft=1024     # number of fft points
+n_shift=512    # number of shift points
 do_delta=false # true when using CNN
 
 # network archtecture
@@ -128,7 +134,12 @@ if [ ${stage} -le 1 ]; then
     fbankdir=fbank
     # Generate the fbank features; by default 80-dimensional fbanks with pitch on each frame
     for x in test train; do
-        steps/make_fbank_pitch.sh --cmd "$train_cmd" --nj 8 data/${x} exp/make_fbank/${x} ${fbankdir}
+        #steps/make_fbank_pitch.sh --cmd "$train_cmd" --nj 8 data/${x} exp/make_fbank/${x} ${fbankdir}
+        # Using librosa
+        local/make_fbank.sh --cmd "${train_cmd}" --nj 8 \
+            --fs ${fs} --fmax "${fmax}" --fmin "${fmin}" \
+            --n_mels ${n_mels} --n_fft ${n_fft} --n_shift ${n_shift} \
+            data/${x} exp/make_fbank/${x} ${fbankdir}
     done
 
     # make a dev set
