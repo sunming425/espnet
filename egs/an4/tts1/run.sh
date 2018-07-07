@@ -1,4 +1,4 @@
-#!/bin/bash -x
+#!/bin/bash 
 
 # Copyright 2018 Nagoya University (Tomoki Hayashi)
 #  Apache 2.0  (http://www.apache.org/licenses/LICENSE-2.0)
@@ -138,7 +138,6 @@ if [ ${stage} -le 1 ]; then
     fbankdir=fbank
     # Generate the fbank features; by default 80-dimensional fbanks with pitch on each frame
     for x in test train; do
-        #steps/make_fbank_pitch.sh --cmd "$train_cmd" --nj 8 data/${x} exp/make_fbank/${x} ${fbankdir}
         # Using librosa
         local/make_fbank.sh --cmd "${train_cmd}" --nj 8 \
             --fs ${fs} --fmax "${fmax}" --fmin "${fmin}" \

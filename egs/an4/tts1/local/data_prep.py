@@ -18,6 +18,7 @@
 import os
 import re
 import sys
+import subprocess
 
 if len(sys.argv) != 3:
     print ('Usage: python data_prep.py [an4_root] [sph2pipe]')
@@ -26,7 +27,7 @@ an4_root = sys.argv[1]
 sph2pipe = sys.argv[2]
 
 sph_dir = {
-    'train': 'an4_clstk', 
+    'train': 'an4_clstk',
     'test': 'an4test_clstk'
 }
 
@@ -55,6 +56,24 @@ for x in ['train', 'test']:
             utt_id = '-'.join([mid, pre, last])
 
             text_f.write(utt_id + ' ' + words + '\n')
-            wav_scp_f.write(utt_id + ' ' + sph2pipe + ' -f wav -p -c 1 ' + \
-                os.path.join(an4_root, 'wav', sph_dir[x], mid, source + '.sph') + ' |\n')
+
+            # Extract Sphere format
+            sph_path = os.path.join(
+                an4_root, 'wav', sph_dir[x], mid, source + '.sph'
+            )
+            wav_path = os.path.join(
+                an4_root, 'wav', sph_dir[x], mid, source + '.wav'
+            )
+            sphere2pipe_call = "%s -f wav -p -c 1 %s %s" % (
+                sph2pipe, sph_path, wav_path
+            )
+            popen = subprocess.Popen(
+                sphere2pipe_call,
+                stdout=subprocess.PIPE,
+                shell=True
+            )
+            popen.wait()
+            output = popen.stdout.read()
+
+            wav_scp_f.write(utt_id + ' ' + wav_path + '\n')
             utt2spk_f.write(utt_id + ' ' + mid + '\n')
