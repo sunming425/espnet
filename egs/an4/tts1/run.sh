@@ -16,12 +16,13 @@ seed=1       # random seed number
 resume=""    # the snapshot path to resume (if set empty, no effect)
 
 # feature extraction related
-fs=16000    # sampling frequency
-fmax=""     # maximum frequency
-fmin=""     # minimum frequency
-n_mels=80   # number of mel basis
-n_fft=1024  # number of fft points
-n_shift=512 # number of shift points
+fs=16000         # sampling frequency
+fmax=""          # maximum frequency
+fmin=""          # minimum frequency
+n_mels=80        # number of mel basis
+n_fft=1024       # number of fft points
+n_shift=512      # number of shift points
+win_length=1024  # number of samples in analysis window
 # encoder related
 embed_dim=512
 elayers=1
@@ -128,7 +129,6 @@ if [ ${stage} -le 0 ]; then
     done
 fi
 
-# AN4 CHANGE: an4 features 
 feat_tr_dir=${dumpdir}/${train_set}/delta${do_delta}; mkdir -p ${feat_tr_dir}
 feat_dt_dir=${dumpdir}/${train_dev}/delta${do_delta}; mkdir -p ${feat_dt_dir}
 if [ ${stage} -le 1 ]; then
@@ -141,7 +141,8 @@ if [ ${stage} -le 1 ]; then
         # Using librosa
         local/make_fbank.sh --cmd "${train_cmd}" --nj 8 \
             --fs ${fs} --fmax "${fmax}" --fmin "${fmin}" \
-            --n_mels ${n_mels} --n_fft ${n_fft} --n_shift ${n_shift} \
+            --n_mels ${n_mels} --n_fft ${n_fft} \
+            --n_shift ${n_shift} --win_length $win_length \
             data/${x} exp/make_fbank/${x} ${fbankdir}
     done
 
