@@ -151,7 +151,6 @@ if [ ${stage} -le 1 ]; then
     utils/subset_data_dir.sh --last data/train ${n} data/${train_set}
 
     # compute global CMVN
-    echo "compute-cmvn-stats scp:data/${train_set}/feats.scp data/${train_set}/cmvn.ark"
     compute-cmvn-stats scp:data/${train_set}/feats.scp data/${train_set}/cmvn.ark
 
     # dump features
