@@ -28,7 +28,7 @@ and also follows [Kaldi](http://kaldi-asr.org/) style data processing, feature e
 - Cudnn 6+ (for the use of GPU)  
 - NCCL 2.0+ (for the use of multi-GPUs)
 
-- PyTorch 0.3.x (**no support for PyTorch 0.4.x**)
+- PyTorch 0.4.x+ (**mainly support PyTorch 0.4.x**)
 - Chainer 4.x+
 
 ## Installation
@@ -230,10 +230,10 @@ We list the character error rate (CER) and word error rate (WER) of major ASR ta
 
 |           | Chainer | Pytorch |
 |-----------|:----:|:----:|
-| Performance | ◎ | ○ |
+| Performance | ◎ | ◎ |
 | Speed | ○ | ◎ |
 | Multi-GPU | supported | supported |
-| VGG-like encoder | supported | no support |
+| VGG-like encoder | supported | supported |
 | RNNLM integration | supported | supported |
 | #Attention types | 3 (no attention, dot, location) | 12 including variants of multihead |
 | TTS recipe suuport | no support | supported |

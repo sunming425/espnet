@@ -23,7 +23,7 @@ if __name__ == '__main__':
     parser.add_argument('--parts', '-p', type=int,
                         help='Number of subparts to be prepared', default=0)
     args = parser.parse_args()
-    
+
     # logging info
     logging.basicConfig(level=logging.INFO,
                         format="%(asctime)s (%(module)s:%(lineno)d) %(levelname)s: %(message)s")
