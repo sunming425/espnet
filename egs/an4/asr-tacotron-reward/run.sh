@@ -9,8 +9,9 @@
 # general configuration
 backend=pytorch
 stage=-1       # start from -1 if you need to start from data download
-gpu=            # will be deprecated, please use ngpu
-ngpu=0          # number of gpus ("0" uses cpu, otherwise use gpu)
+gpu=           # will be deprecated, please use ngpu
+ngpu=0         # number of gpus ("0" uses cpu, otherwise use gpu)
+nj=32          # numebr of parallel jobs
 debugmode=1
 dumpdir=dump   # directory to dump full features
 N=0            # number of minibatches to be used (mainly for debugging). "0" uses all minibatches.
@@ -41,6 +42,7 @@ eunits=320
 eprojs=320
 subsample=1_2_2_1_1 # skip every n frame from input to nth layers
 # decoder related
+spk_embed_dim=512
 dlayers=1
 dunits=300
 # attention related
@@ -193,6 +195,61 @@ if [ ${stage} -le 2 ]; then
     done
 fi
 
+if [ ${stage} -le 3 ]; then
+    echo "stage 3: x-vector extraction"
+
+    # Make MFCCs and compute the energy-based VAD for each dataset
+    mfccdir=mfcc
+    vaddir=mfcc
+    for name in test train; do
+        utils/copy_data_dir.sh data/${name} data/${name}_mfcc
+        steps/make_mfcc.sh \
+            --write-utt2num-frames true \
+            --mfcc-config conf/mfcc.conf \
+            --nj ${nj} --cmd "$train_cmd" \
+            data/${name}_mfcc exp/make_mfcc $mfccdir
+        utils/fix_data_dir.sh data/${name}_mfcc
+        # TODO: I had to change this to 10
+        sid/compute_vad_decision.sh --nj 10 --cmd "$train_cmd" \
+            data/${name}_mfcc exp/make_vad ${vaddir}
+        utils/fix_data_dir.sh data/${name}_mfcc
+    done
+
+    # Check pretrained model existence
+    nnet_dir=exp/xvector_nnet_1a
+    if [ ! -e $nnet_dir ];then
+        echo "X-vector model does not exist. Download pre-trained model."
+        wget http://kaldi-asr.org/models/8/0008_sitw_v2_1a.tar.gz
+        tar xvf 0008_sitw_v2_1a.tar.gz
+        mv 0008_sitw_v2_1a/exp/xvector_nnet_1a exp
+        rm -rf 0008_sitw_v2_1a.tar.gz 0008_sitw_v2_1a
+    fi
+    # Extract x-vector
+    for name in test train; do
+        sid/nnet3/xvector/extract_xvectors.sh --cmd "$train_cmd --mem 4G" --nj 10 \
+            $nnet_dir data/${name}_mfcc \
+            $nnet_dir/xvectors_${name}
+    done
+
+    # feats.scp  spk2utt  text  utt2spk  wav.scp
+
+    # make a dev set from train
+    cp data/train/{spk2utt,utt2spk,wav.scp} ${nnet_dir}/xvectors_train/ 
+    cp ${nnet_dir}/xvectors_train/xvector.scp ${nnet_dir}/xvectors_train/feats.scp
+    utils/subset_data_dir.sh --first $nnet_dir/xvectors_train 100 ${nnet_dir}/xvectors_${train_dev}
+    n=$[`cat data/train/text | wc -l` - 100]
+    utils/subset_data_dir.sh --last $nnet_dir/xvectors_train ${n} ${nnet_dir}/xvectors_${train_set}
+    # Test
+    cp ${nnet_dir}/xvectors_test/xvector.scp ${nnet_dir}/xvectors_test/feats.scp
+
+    # Update json
+    local/update_json.sh ${dumpdir}/${train_set}/delta${do_delta}/data.json ${nnet_dir}/xvectors_${train_set}/feats.scp 
+    # This should be recog set
+    local/update_json.sh ${dumpdir}/${train_dev}/delta${do_delta}/data.json ${nnet_dir}/xvectors_${train_dev}/feats.scp
+    local/update_json.sh ${dumpdir}/test/delta${do_delta}/data.json ${nnet_dir}/xvectors_test/feats.scp
+
+fi
+
 if [ -z ${tag} ]; then
     expdir=exp/${train_set}_${etype}_e${elayers}_subsample${subsample}_unit${eunits}_proj${eprojs}_d${dlayers}_unit${dunits}_${atype}_aconvc${aconv_chans}_aconvf${aconv_filts}_mtlalpha${mtlalpha}_${opt}_bs${batchsize}_mli${maxlen_in}_mlo${maxlen_out}
     if ${do_delta}; then
@@ -277,4 +334,3 @@ if [ ${stage} -le 4 ]; then
     wait
     echo "Finished"
 fi
-
