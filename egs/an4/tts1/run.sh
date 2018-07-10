@@ -33,6 +33,7 @@ econv_filts=5
 do_delta=false # true when using CNN (MUST BE ALLWAYS FALSE FOR TACOTRON)
 
 # decoder related
+spk_embed_dim=512
 dlayers=2
 dunits=1024
 prenet_layers=2  # if set 0, no prenet is used
@@ -137,6 +138,10 @@ if [ ${stage} -le 1 ]; then
     echo "stage 1: Feature Generation"
     fbankdir=fbank
     # Generate the fbank features; by default 80-dimensional fbanks with pitch on each frame
+    # note that we will split as follows
+    # train_set <- train :100 
+    # train_dev <- train 100: 
+    # 
     for x in test train; do
         # Using librosa
         local/make_fbank.sh --cmd "${train_cmd}" --nj 8 \
@@ -159,6 +164,9 @@ if [ ${stage} -le 1 ]; then
         data/${train_set}/feats.scp data/${train_set}/cmvn.ark exp/dump_feats/train ${feat_tr_dir}
     dump.sh --cmd "$train_cmd" --nj 9 --do_delta $do_delta \
         data/${train_dev}/feats.scp data/${train_set}/cmvn.ark exp/dump_feats/dev ${feat_dt_dir}
+    # FIXME: recog_set="train_dev test" AND
+    # feat_dt_dir=${dumpdir}/${train_dev}/delta${do_delta}
+    # Isn't the dev written two times?
     for rtask in ${recog_set}; do
         feat_recog_dir=${dumpdir}/${rtask}/delta${do_delta}; mkdir -p ${feat_recog_dir}
         dump.sh --cmd "$train_cmd" --nj 8 --do_delta $do_delta \
@@ -190,6 +198,54 @@ if [ ${stage} -le 2 ]; then
     done
 fi
 
+if [ ${stage} -le 3 ]; then
+    echo "stage 3: x-vector extraction"
+
+    # Make MFCCs and compute the energy-based VAD for each dataset
+    mfccdir=mfcc
+    vaddir=mfcc
+    for name in test train; do
+        utils/copy_data_dir.sh data/${name} data/${name}_mfcc
+        steps/make_mfcc.sh \
+            --write-utt2num-frames true \
+            --mfcc-config conf/mfcc.conf \
+            --nj ${nj} --cmd "$train_cmd" \
+            data/${name}_mfcc exp/make_mfcc $mfccdir
+        utils/fix_data_dir.sh data/${name}_mfcc
+        # TODO: I had to change this to 10
+        sid/compute_vad_decision.sh --nj 10 --cmd "$train_cmd" \
+            data/${name}_mfcc exp/make_vad ${vaddir}
+        utils/fix_data_dir.sh data/${name}_mfcc
+    done
+
+    # Check pretrained model existence
+    nnet_dir=exp/xvector_nnet_1a
+    if [ ! -e $nnet_dir ];then
+        echo "X-vector model does not exist. Download pre-trained model."
+        wget http://kaldi-asr.org/models/8/0008_sitw_v2_1a.tar.gz
+        tar xvf 0008_sitw_v2_1a.tar.gz
+        mv 0008_sitw_v2_1a/exp/xvector_nnet_1a exp
+        rm -rf 0008_sitw_v2_1a.tar.gz 0008_sitw_v2_1a
+    fi
+    # Extract x-vector
+    for name in test train; do
+        sid/nnet3/xvector/extract_xvectors.sh --cmd "$train_cmd --mem 4G" --nj 10 \
+            $nnet_dir data/${name}_mfcc \
+            $nnet_dir/xvectors_${name}
+    done
+
+    # make a dev set
+    utils/subset_data_dir.sh --first $nnet_dir/xvectors_${name} 100 data/xvectors_${train_dev}
+    n=$[`cat data/train/text | wc -l` - 100]
+    utils/subset_data_dir.sh --last $nnet_dir/xvectors_${name} ${n} data/xvectors_${train_set}
+
+    # Update json
+    local/update_json.sh ${dumpdir}/${train_set}/delta${do_delta}/data.json ${nnet_dir}/xvectors_${train_set}/xvector.scp
+    # This shuld be recog set
+    local/update_json.sh ${dumpdir}/${train_dev}/delta${do_delta}/data.json ${nnet_dir}/xvectors_${train_dev}/xvector.scp
+    local/update_json.sh ${dumpdir}/${test}/delta${do_delta}/data.json ${nnet_dir}/xvectors_${test}/xvector.scp
+
+fi
 
 if [ -z ${tag} ];then
     expdir=exp/${train_set}_taco2_enc${embed_dim}
@@ -228,7 +284,7 @@ else
     expdir=exp/${train_set}_${tag}
 fi
 
-if [ ${stage} -le 3 ];then
+if [ ${stage} -le 4 ];then
     echo "stage 3: Text-to-speech model training"
     tr_json=${feat_tr_dir}/data.json
     dt_json=${feat_dt_dir}/data.json
@@ -247,6 +303,7 @@ if [ ${stage} -le 3 ];then
            --econv_layers ${econv_layers} \
            --econv_chans ${econv_chans} \
            --econv_filts ${econv_filts} \
+           --spk_embed_dim ${spk_embed_dim} \
            --dlayers ${dlayers} \
            --dunits ${dunits} \
            --prenet_layers ${prenet_layers} \
@@ -276,7 +333,7 @@ if [ ${stage} -le 3 ];then
 fi
 
 outdir=${expdir}/outputs_${model}_th${threshold}_mlr${minlenratio}-${maxlenratio}
-if [ ${stage} -le 4 ];then
+if [ ${stage} -le 5 ];then
     echo "stage 4: Decoding"
     for sets in ${train_dev} ${eval_set};do
         [ ! -e  ${outdir}/${sets} ] && mkdir -p ${outdir}/${sets}
@@ -302,7 +359,7 @@ if [ ${stage} -le 4 ];then
     done
 fi
 
-if [ ${stage} -le 5 ];then
+if [ ${stage} -le 6 ];then
     echo "stage 5: Synthesis"
     for sets in ${train_dev} ${eval_set};do
         [ ! -e ${outdir}_denorm/${sets} ] && mkdir -p ${outdir}_denorm/${sets}
