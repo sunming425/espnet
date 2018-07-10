@@ -102,7 +102,6 @@ train_set=train_no_dev
 train_dev=train_dev
 recog_set="train_dev test"
 
-# AN4 CHANGE: Download an4 data
 if [ ${stage} -le -1 ]; then
     echo "stage -1: Data Download"
     mkdir -p ${db_root}
@@ -141,7 +140,6 @@ if [ ${stage} -le 1 ]; then
     # note that we will split as follows
     # train_set <- train :100 
     # train_dev <- train 100: 
-    # 
     for x in test train; do
         # Using librosa
         local/make_fbank.sh --cmd "${train_cmd}" --nj 8 \
