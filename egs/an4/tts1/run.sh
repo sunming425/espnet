@@ -234,16 +234,22 @@ if [ ${stage} -le 3 ]; then
             $nnet_dir/xvectors_${name}
     done
 
-    # make a dev set
-    utils/subset_data_dir.sh --first $nnet_dir/xvectors_${name} 100 data/xvectors_${train_dev}
+    # feats.scp  spk2utt  text  utt2spk  wav.scp
+
+    # make a dev set from train
+    cp data/train/{spk2utt,utt2spk,wav.scp} ${nnet_dir}/xvectors_train/ 
+    cp ${nnet_dir}/xvectors_train/xvector.scp ${nnet_dir}/xvectors_train/feats.scp
+    utils/subset_data_dir.sh --first $nnet_dir/xvectors_train 100 ${nnet_dir}/xvectors_${train_dev}
     n=$[`cat data/train/text | wc -l` - 100]
-    utils/subset_data_dir.sh --last $nnet_dir/xvectors_${name} ${n} data/xvectors_${train_set}
+    utils/subset_data_dir.sh --last $nnet_dir/xvectors_train ${n} ${nnet_dir}/xvectors_${train_set}
+    # Test
+    cp ${nnet_dir}/xvectors_test/xvector.scp ${nnet_dir}/xvectors_test/feats.scp
 
     # Update json
-    local/update_json.sh ${dumpdir}/${train_set}/delta${do_delta}/data.json ${nnet_dir}/xvectors_${train_set}/xvector.scp
-    # This shuld be recog set
-    local/update_json.sh ${dumpdir}/${train_dev}/delta${do_delta}/data.json ${nnet_dir}/xvectors_${train_dev}/xvector.scp
-    local/update_json.sh ${dumpdir}/${test}/delta${do_delta}/data.json ${nnet_dir}/xvectors_${test}/xvector.scp
+    local/update_json.sh ${dumpdir}/${train_set}/delta${do_delta}/data.json ${nnet_dir}/xvectors_${train_set}/feats.scp 
+    # This should be recog set
+    local/update_json.sh ${dumpdir}/${train_dev}/delta${do_delta}/data.json ${nnet_dir}/xvectors_${train_dev}/feats.scp
+    local/update_json.sh ${dumpdir}/test/delta${do_delta}/data.json ${nnet_dir}/xvectors_test/feats.scp
 
 fi
 
