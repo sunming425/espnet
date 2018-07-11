@@ -143,7 +143,74 @@ class Loss(torch.nn.Module):
         return self.loss
 
 
-def pad_list(xs, pad_value):
+class ExpectedLoss(torch.nn.Module):
+    def __init__(self, predictor, args, loss_fn=None):
+        super(ExpectedLoss, self).__init__()
+        self.mtlalpha = args.mtlalpha
+        self.loss = None
+        self.accuracy = None
+        self.predictor = predictor
+        self.verbose = args.verbose
+        self.char_list = args.char_list
+        self.reporter = Reporter()
+        self.loss_fn = loss_fn
+        self.n_samples_per_input = args.n_samples_per_input
+        self.maxlenratio = args.sample_maxlenratio
+        self.minlenratio = args.sample_minlenratio
+        self.sample_scaling = args.sample_scaling
+
+    def forward(self, x):
+        '''Loss forward
+
+        :param x:
+        :return:
+        '''
+        # sample output sequence with the current model
+        loss_ctc, loss_att, ys = self.predictor.generate(x,
+                                         n_samples_per_input=self.n_samples_per_input,
+                                         maxlenratio=self.maxlenratio,
+                                         minlenratio=self.minlenratio)
+        acc = 0.
+        loss = None
+        alpha = self.mtlalpha
+        if alpha == 0:
+            loss = loss_att
+            loss_att_data = loss_att.data[0] if torch_is_old else float(loss_att)
+            loss_ctc_data = None
+        elif alpha == 1:
+            loss = loss_ctc
+            loss_att_data = None
+            loss_ctc_data = loss_ctc.data[0] if torch_is_old else float(loss_ctc)
+        else:
+            loss = alpha * loss_ctc + (1 - alpha) * loss_att
+            loss_att_data = loss_att.data[0] if torch_is_old else float(loss_att)
+            loss_ctc_data = loss_ctc.data[0] if torch_is_old else float(loss_ctc)
+
+        batch = int(len(loss.data) / self.n_samples_per_input)
+        # loss -> posterior probs
+        logprob = -loss.data.view(batch, self.n_samples_per_input)
+        prob = torch.exp((logprob - torch.max(logprob, dim=1, keepdim=True)[0]) * self.sample_scaling)
+        prob /= torch.sum(prob, dim=1, keepdim=True)
+        if self.verbose > 0 and self.char_list is not None:
+            for i in six.moves.range(batch):
+                for j in six.moves.range(self.n_samples_per_input):
+                    y_str = "".join([self.char_list[int(idx)] for idx in ys[i * self.n_samples_per_input + j]])
+                    print "generate[%d,%d]: %.4f %.4f " % (i, j, logprob[i, j], prob[i,j]) + y_str
+        # compute expected loss with another loss function
+        #self.loss = torch.sum(self.loss_fn(x, ys) * Variable(prob.view(-1))) / batch
+        self.loss = torch.sum(loss * Variable(prob.view(-1))) / batch
+
+        loss_data = self.loss.data[0] if torch_is_old else float(self.loss)
+        if loss_data < CTC_LOSS_THRESHOLD and not math.isnan(loss_data):
+            self.reporter.report(loss_ctc_data, loss_att_data, acc, loss_data)
+        else:
+            logging.warning('loss (=%f) is not correct', self.loss.data)
+
+        return self.loss
+
+
+def pad_list(xs, pad_value=float("nan")):
+    assert isinstance(xs[0], Variable)
     n_batch = len(xs)
     max_len = max(x.size(0) for x in xs)
     if torch_is_old:
@@ -378,6 +445,52 @@ class E2E(torch.nn.Module):
             self.train()
         return y
 
+    # x[i]: ('utt_id', {'ilen':'xxx',...}})
+    def generate(self, data, n_samples_per_input=10, maxlenratio=1.0, minlenratio=0.3):
+        '''E2E forward
+
+        :param data:
+        :return:
+        '''
+        # utt list of frame x dim
+        xs = [d[1]['feat'] for d in data]
+        # remove 0-output-length utterances
+        tids = [d[1]['output'][0]['tokenid'].split() for d in data]
+        filtered_index = filter(lambda i: len(tids[i]) > 0, range(len(xs)))
+        sorted_index = sorted(filtered_index, key=lambda i: -len(xs[i]))
+        if len(sorted_index) != len(xs):
+            logging.warning('Target sequences include empty tokenid (batch %d -> %d).' % (
+                len(xs), len(sorted_index)))
+        xs = [xs[i] for i in sorted_index]
+
+        # subsample frame
+        xs = [xx[::self.subsample[0], :] for xx in xs]
+        ilens = np.fromiter((xx.shape[0] for xx in xs), dtype=np.int64)
+        if self.training:
+            hs = [to_cuda(self, Variable(torch.from_numpy(xx))) for xx in xs]
+        else:
+            hs = [to_cuda(self, Variable(torch.from_numpy(xx), volatile=True)) for xx in xs]
+
+        # 1. encoder
+        xpad = pad_list(hs)
+        hpad, hlens = self.enc(xpad, ilens)
+        # expand encoder states by n_sample_per_input
+        hpad, hlens = mask_by_length_and_multiply(hpad, hlens, 0, n_samples_per_input)
+        # 2. attention-based generation
+        if self.mtlalpha == 1:
+            raise Exception('CTC-only mode (mtlalpha=1) is not supported.')
+
+        loss_att, ys = self.dec.generate(hpad, hlens, maxlenratio=maxlenratio, minlenratio=minlenratio)
+        # 3. CTC loss
+        ys = [to_cuda(self, Variable(torch.from_numpy(y))) for y in ys]
+        loss_ctc = None
+        if self.mtlalpha == 0:
+            loss_ctc = None
+        else:
+            loss_ctc = self.ctc(hpad, hlens, ys, reduce=False)
+
+        return loss_ctc, loss_att, ys
+
     def calculate_all_attentions(self, data):
         '''E2E attention calculation
 
@@ -431,7 +544,7 @@ class E2E(torch.nn.Module):
 # ------------- CTC Network --------------------------------------------------------------------------------------------
 class _ChainerLikeCTC(warp_ctc._CTC):
     @staticmethod
-    def forward(ctx, acts, labels, act_lens, label_lens):
+    def forward(ctx, acts, labels, act_lens, label_lens, reduce):
         is_cuda = True if acts.is_cuda else False
         acts = acts.contiguous()
         loss_func = warp_ctc.gpu_ctc if is_cuda else warp_ctc.cpu_ctc
@@ -446,14 +559,17 @@ class _ChainerLikeCTC(warp_ctc._CTC):
                   minibatch_size,
                   costs)
         # modified only here from original
-        costs = torch.FloatTensor([costs.sum()]) / acts.size(1)
-        ctx.grads = Variable(grads)
-        ctx.grads /= ctx.grads.size(1)
+        if reduce:
+            costs = torch.FloatTensor([costs.sum()]) / acts.size(1)
+            ctx.grads = Variable(grads)
+            ctx.grads /= ctx.grads.size(1)
+        else:
+            ctx.grads = Variable(grads)
 
         return costs
 
 
-def chainer_like_ctc_loss(acts, labels, act_lens, label_lens):
+def chainer_like_ctc_loss(acts, labels, act_lens, label_lens, reduce=True):
     """Chainer like CTC Loss
 
     acts: Tensor of (seqLength x batch x outputDim) containing output from network

@@ -35,6 +35,8 @@ def main():
                         help='Random seed')
     parser.add_argument('--debugdir', type=str,
                         help='Output directory for debugging')
+    parser.add_argument('--prior-model', '-p', default='',
+                        help='Initial model')
     parser.add_argument('--resume', '-r', default='', nargs='?',
                         help='Resume the training from snapshot')
     parser.add_argument('--minibatches', '-N', type=int, default='-1',
@@ -136,6 +138,17 @@ def main():
                         help='Gradient norm threshold to clip')
     parser.add_argument('--num-save-attention', default=3, type=int,
                         help='Number of samples of attention to be saved')
+    # sampling related
+    parser.add_argument('--expected-loss', default='', type=str,
+                        help='Type of expected loss (tts, wer, ...)')
+    parser.add_argument('--n-samples-per-input', default=5, type=int,
+                        help='Number of samples per input generated from model')
+    parser.add_argument('--sample-maxlenratio', default=1, type=float,
+                        help='Maximum length ratio of each sample to input length')
+    parser.add_argument('--sample-minlenratio', default=0.2, type=float,
+                        help='minimum length ratio of each sample to input length')
+    parser.add_argument('--sample-scaling', default=0.1, type=float,
+                        help='Scaling factor for sample log-likelihood')
     args = parser.parse_args()
 
     # logging info

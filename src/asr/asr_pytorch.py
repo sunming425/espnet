@@ -221,6 +221,15 @@ def train(args):
     # specify model architecture
     e2e = E2E(idim, odim, args)
     model = Loss(e2e, args.mtlalpha)
+    if args.prior_model:
+        model.load_state_dict(torch.load(args.prior_model))
+    if args.expected_loss:
+        # need to specify a loss function (loss_fn) to compute the expected loss
+        if args.expected_loss == 'tts':
+            loss_fn=None
+        else:
+            raise NotImplemented('Unknown expected loss: %s' % args.expected_loss)
+        model = ExpectedLoss(model.predictor, args, loss_fn=loss_fn)
 
     if args.tts_model:
         from e2e_tts_th import TacotronRewardLoss
