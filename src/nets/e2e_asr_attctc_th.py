@@ -33,8 +33,6 @@ CTC_LOSS_THRESHOLD = 10000
 CTC_SCORING_RATIO = 1.5
 MAX_DECODER_OUTPUT = 5
 
-torch_is_old = torch.__version__.startswith("0.3.")
-
 
 def to_cuda(m, x):
     assert isinstance(m, torch.nn.Module)
@@ -582,7 +580,7 @@ def chainer_like_ctc_loss(acts, labels, act_lens, label_lens, reduce=True):
     _assert_no_grad(labels)
     _assert_no_grad(act_lens)
     _assert_no_grad(label_lens)
-    return _ChainerLikeCTC.apply(acts, labels, act_lens, label_lens)
+    return _ChainerLikeCTC.apply(acts, labels, act_lens, label_lens, reduce)
 
 
 class CTC(torch.nn.Module):
@@ -593,7 +591,7 @@ class CTC(torch.nn.Module):
         self.ctc_lo = torch.nn.Linear(eprojs, odim)
         self.loss_fn = chainer_like_ctc_loss  # CTCLoss()
 
-    def forward(self, hpad, ilens, ys):
+    def forward(self, hpad, ilens, ys, reduce=True):
         '''CTC forward
 
         :param hs:
@@ -619,7 +617,7 @@ class CTC(torch.nn.Module):
         # get ctc loss
         # expected shape of seqLength x batchSize x alphabet_size
         y_hat = y_hat.transpose(0, 1)
-        self.loss = to_cuda(self, self.loss_fn(y_hat, y_true, ilens, olens))
+        self.loss = to_cuda(self, self.loss_fn(y_hat, y_true, ilens, olens, reduce=reduce))
         logging.info('ctc loss:' + str(self.loss.data[0]))
 
         return self.loss
@@ -640,6 +638,16 @@ def mask_by_length(xs, length, fill=0):
         ret[i, :l] = xs[i, :l]
     return ret
 
+
+def mask_by_length_and_multiply(xs, length, fill=0, msize=1):
+    assert xs.size(0) == len(length)
+    ret = Variable(xs.data.new(xs.size(0) * msize, xs.size(1), xs.size(2)).fill_(fill))
+    k = 0
+    for i, l in enumerate(length):
+        for j in range(msize):
+            ret[k, :l] = xs[i, :l]
+            k += 1
+    return ret, length * msize
 
 # ------------- Attention Network --------------------------------------------------------------------------------------
 class NoAtt(torch.nn.Module):
@@ -2051,6 +2059,90 @@ class Decoder(torch.nn.Module):
 
         # remove sos
         return nbest_hyps
+
+    def generate(self, hpad, hlen, maxlenratio=1.0, minlenratio=0.3, rnnlm=None):
+        '''Decoder generate sequence
+
+        :param hs:
+        :return:
+        '''
+        # get dim, length info
+        # initialization
+        self.loss = None
+        n_samples = len(hlen)
+        c_list = [self.zero_state(hpad)]
+        z_list = [self.zero_state(hpad)]
+        for l in six.moves.range(1, self.dlayers):
+            c_list.append(self.zero_state(hpad))
+            z_list.append(self.zero_state(hpad))
+        att_w = None
+        z_all = []
+        self.att.reset()  # reset pre-computation of h
+
+        # preprate sos
+        if maxlenratio == 0:
+            maxlen = max(hlen)
+        else:
+            # maxlen >= 1
+            maxlen = max(1, int(maxlenratio * max(hlen)))
+        minlen = int(minlenratio * min(hlen))
+        odim = self.eos + 1
+        # prepare the first label <sos>
+        y = to_cuda(self, Variable(torch.from_numpy(np.full(n_samples, self.sos, dtype=np.int64))))
+        indices = np.array(range(odim), dtype=np.int32)
+        y_gen = np.full((maxlen, n_samples), self.ignore_id, dtype=np.int64)
+        not_ended = np.array([True] * n_samples, dtype=np.bool_)
+        # make a mask to avoid sentence end prediction
+        no_end_mask = np.zeros((1, odim), dtype=np.float32)
+        no_end_mask[0, self.eos] = -1.0e+10
+        no_end_mask = to_cuda(self, Variable(torch.from_numpy(no_end_mask)))
+        # loop for an output sequence
+        loss_list = []
+        for i in six.moves.range(maxlen):
+            if i > 0:
+                yg = y_gen[i-1]
+                yg[yg == -1] = 0
+                y = to_cuda(self, Variable(torch.from_numpy(yg)))
+            ey = self.embed(y)  # utt x zdim
+            att_c, att_w = self.att(hpad, hlen, z_list[0], att_w)
+            ey = torch.cat((ey, att_c), dim=1)  # n_samples x (zdim + hdim)
+            z_list[0], c_list[0] = self.decoder[0](ey, (z_list[0], c_list[0]))
+            for l in six.moves.range(1, self.dlayers):
+                z_list[l], c_list[l] = self.decoder[l](
+                    z_list[l - 1], (z_list[l], c_list[l]))
+            oy = self.output(z_list[-1])
+            if i <= minlen:  # exclude <eos> while sequence is short
+                oy += no_end_mask
+            sy = F.softmax(oy, dim=1).data.cpu().numpy()
+
+            if i < maxlen-1:
+                for j in six.moves.range(n_samples):
+                    if not_ended[j]:
+                        y_gen[i, j] = np.random.choice(indices, 1, p=sy[j]) # or argmax in some cases
+                not_ended &= y_gen[i, :]!=self.eos
+            else:
+                y_gen[i, not_ended] = self.eos
+            del sy
+
+            t = to_cuda(self, Variable(torch.from_numpy(y_gen[i])))
+            ce_loss = F.cross_entropy(oy, t, ignore_index=self.ignore_id, size_average=False, reduce=False)
+            loss_list.append(ce_loss)
+
+        sample_loss = torch.sum(torch.stack(loss_list), dim=0)
+        # show predicted character sequence for debug
+        y_list = []
+        for i in six.moves.range(n_samples):
+            y_seq = []
+            for j in six.moves.range(maxlen):
+                y_seq.append(y_gen[j, i])
+                if y_gen[j, i] == self.eos:
+                    break
+            y_list.append(np.array(y_seq, dtype=np.int32))
+            if self.verbose > 0 and self.char_list is not None:
+                y_str = "".join([self.char_list[int(idx)] for idx in y_seq])
+                logging.info("generation[%d]: %.4f " % (i, sample_loss.data[i]) + y_str)
+
+        return sample_loss, y_list
 
     def calculate_all_attentions(self, hpad, hlen, ys):
         '''Calculate all of attentions
