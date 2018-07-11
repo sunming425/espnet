@@ -260,7 +260,7 @@ else
 fi
 mkdir -p ${expdir}
 
-if [ ${stage} -le 3 ]; then
+if [ ${stage} -le 4 ]; then
     echo "stage 3: Network Training"
     ${cuda_cmd} --gpu ${ngpu} ${expdir}/train.log \
         asr_train.py \
@@ -291,10 +291,10 @@ if [ ${stage} -le 3 ]; then
         --maxlen-out ${maxlen_out} \
         --opt ${opt} \
         --epochs ${epochs} \
-        #--tts-model ${tacotron_model}
+        --tts-model ${tacotron_model}
 fi
 
-if [ ${stage} -le 4 ]; then
+if [ ${stage} -le 5 ]; then
     echo "stage 4: Decoding"
     nj=8
 
