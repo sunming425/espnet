@@ -291,7 +291,8 @@ if [ ${stage} -le 4 ]; then
         --maxlen-out ${maxlen_out} \
         --opt ${opt} \
         --epochs ${epochs} \
-        --tts-model ${tacotron_model}
+        --tts-model ${tacotron_model} \
+        --expected-loss tts
 fi
 
 if [ ${stage} -le 5 ]; then

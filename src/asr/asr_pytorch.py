@@ -227,21 +227,20 @@ def train(args):
     if args.expected_loss:
         # need to specify a loss function (loss_fn) to compute the expected loss
         if args.expected_loss == 'tts':
-            loss_fn=None
+            from e2e_tts_th import TacotronRewardLoss
+            assert args.tts_model, \
+                "Need to provide --tts-model together with --expected-loss tts"
+            # Read model
+            with open(args.tts_model, 'rb') as f:
+                idim, odim, train_args = pickle.load(f)
+            loss_fn = TacotronRewardLoss(
+                idim=idim,
+                odim=odim,
+                train_args=train_args
+            )
         else:
             raise NotImplemented('Unknown expected loss: %s' % args.expected_loss)
         model = ExpectedLoss(model.predictor, args, loss_fn=loss_fn)
-
-    if args.tts_model:
-        from e2e_tts_th import TacotronRewardLoss
-        # Read model
-        with open(args.tts_model, 'rb') as f:
-            idim, odim, train_args = pickle.load(f)
-        tts_model = TacotronRewardLoss(
-            idim=idim,
-            odim=odim,
-            train_args=train_args
-        )
 
     # write model config
     if not os.path.exists(args.outdir):

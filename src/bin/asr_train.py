@@ -140,6 +140,7 @@ def main():
                         help='Number of samples of attention to be saved')
     # sampling related
     parser.add_argument('--expected-loss', default='', type=str,
+                        choices=['tts', 'wer'],
                         help='Type of expected loss (tts, wer, ...)')
     parser.add_argument('--n-samples-per-input', default=5, type=int,
                         help='Number of samples per input generated from model')
