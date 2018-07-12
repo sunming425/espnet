@@ -261,7 +261,7 @@ fi
 mkdir -p ${expdir}
 
 if [ ${stage} -le 4 ]; then
-    echo "stage 3: Network Training"
+    echo "stage 4: Network Training"
     ${cuda_cmd} --gpu ${ngpu} ${expdir}/train.log \
         asr_train.py \
         --ngpu ${ngpu} \
@@ -296,7 +296,7 @@ if [ ${stage} -le 4 ]; then
 fi
 
 if [ ${stage} -le 5 ]; then
-    echo "stage 4: Decoding"
+    echo "stage 5: Decoding"
     nj=8
 
     for rtask in ${recog_set}; do

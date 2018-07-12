@@ -232,11 +232,11 @@ def train(args):
                 "Need to provide --tts-model together with --expected-loss tts"
             # Read model
             with open(args.tts_model, 'rb') as f:
-                idim, odim, train_args = pickle.load(f)
+                idim_taco, odim_taco, train_args_taco = pickle.load(f)
             loss_fn = TacotronRewardLoss(
-                idim=idim,
-                odim=odim,
-                train_args=train_args
+                idim=idim_taco,
+                odim=odim_taco,
+                train_args=train_args_taco
             )
         else:
             raise NotImplemented('Unknown expected loss: %s' % args.expected_loss)

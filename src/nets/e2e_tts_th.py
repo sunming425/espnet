@@ -831,7 +831,6 @@ class Decoder(torch.nn.Module):
 def TacotronRewardLoss(idim=None, odim=None, train_args=None,
                        use_masking=False, bce_pos_weight=20.0,
                        spk_embed_dim=None):
-                 
 
     # define output activation function
     if hasattr(train_args, 'output_activation'):
