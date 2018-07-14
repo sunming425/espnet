@@ -84,7 +84,7 @@ def format2dict(kaldi_output):
     return sentence2stats
 
 
-def add_scp_data_to_input(in_data_json, in_scp, sent2dim, sent2len):
+def add_scp_data_to_input(in_data_json, in_scp, input_name, sent2dim, sent2len):
 
     # SANITY CHECKS:
     # json and scp file list coincide
@@ -104,32 +104,41 @@ def add_scp_data_to_input(in_data_json, in_scp, sent2dim, sent2len):
     new_json = {'utts': {}}
     for utt_name, utt_content in in_data_json['utts'].items():
 
-        # Copy old content
-        new_json['utts'][utt_name] = utt_content
-
-        # Find latest input, increase counter
-        input_names = sorted(map(itemgetter('name'), utt_content['input']))
-        input_regex = re.compile('input([0-9]+)')
-        assert all([
-            input_regex.match(input_name)
-            for input_name in input_names
-        ]), (
-            "Utterance %s: Expected input names of type input<number>"
-            % utt_name
-        )
-        input_n = int(input_regex.match(input_names[-1]).groups(0)[0]) + 1
-        new_input_name = 'input%d' % input_n
+        # Get shape
         if sent2len:
             # ark-class == matrix
             shape = [sent2len[utt_name], sent2dim[utt_name]]
         else:
             # ark-class == vector
             shape = [sent2dim[utt_name]]
-        new_json['utts'][utt_name]['input'].append({
-            u'feat': in_scp[utt_name],
-            u'name': new_input_name,
-            u'shape': shape
-        })
+
+        # Copy old content
+        new_json['utts'][utt_name] = utt_content
+
+        # Find latest input, increase counter
+        feature_exists = False
+        for input_index, input in enumerate(utt_content['input']):
+            if input_name == input['name']:
+#                print(
+#                    "%s: Will overwrite content of %s" %
+#                    (yellow("WARNING"), input_index)
+#                )
+                feature_exists = True
+                break
+
+        if feature_exists:
+            new_json['utts'][utt_name]['input'][input_index] = {
+                u'feat': in_scp[utt_name],
+                u'name': input_name,
+                u'shape': shape
+            }
+
+        else:
+            new_json['utts'][utt_name]['input'].append({
+                u'feat': in_scp[utt_name],
+                u'name': input_name,
+                u'shape': shape
+            })
 
     return new_json
 
@@ -143,20 +152,25 @@ def argument_parser(sys_argv):
         help='Input list containing paths of ark files'
     )
     parser.add_argument(
+        '--ark-class',
+        type=str,
+        help='optional json output file'
+    )
+    parser.add_argument(
         '--in-json-file',
         type=str,
         help='json format data that we wisth to act upon'
+    )
+    parser.add_argument(
+        '--input-name',
+        type=str,
+        help='name of the feature we wil act upon'
     )
     parser.add_argument(
         '--out-json-file',
         type=str,
         choices=['matrix', 'vector'],
         help='Type of ark file (this is relevant for the Kaldi calls)'
-    )
-    parser.add_argument(
-        '--ark-class',
-        type=str,
-        help='optional json output file'
     )
     parser.add_argument(
         '--action',
@@ -200,8 +214,9 @@ if __name__ == '__main__':
         assert (
             args.in_scp_file and
             args.in_json_file and
-            args.ark_class
-        ), "Requires --in-scp-file --in-ark-class --in-json-file"
+            args.ark_class and
+            args.input_name
+        ), "Requires --in-scp-file --in-ark-class --input-name --in-json-file"
 
         # Read number of feature vectors
         if args.ark_class == 'matrix':
@@ -240,6 +255,7 @@ if __name__ == '__main__':
         new_json = add_scp_data_to_input(
             in_data_json,
             in_scp,
+            args.input_name,
             sent2dim,
             sent2len
         )
