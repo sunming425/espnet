@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/bin/bash 
 
 # Copyright 2017 Johns Hopkins University (Shinji Watanabe)
 #  Apache 2.0  (http://www.apache.org/licenses/LICENSE-2.0)
@@ -28,9 +28,9 @@ n_fft=512        # number of fft points
 n_shift=160      # number of shift points
 win_length=400   # number of samples in analysis window
 # Tacotron config
-#n_fft=1024      # number of fft points
-#n_shift=512     # number of shift points
-#win_length=1024 # number of samples in analysis window
+taco_n_fft=1024      # number of fft points
+taco_n_shift=512     # number of shift points
+taco_win_length=1024 # number of samples in analysis window
 #
 do_delta=false # true when using CNN
 
@@ -165,7 +165,8 @@ if [ ${stage} -le 1 ]; then
     dump.sh --cmd "$train_cmd" --nj 8 --do_delta $do_delta \
         data/${train_dev}/feats.scp data/${train_set}/cmvn.ark exp/dump_feats/dev ${feat_dt_dir}
     for rtask in ${recog_set}; do
-        feat_recog_dir=${dumpdir}/${rtask}/delta${do_delta}; mkdir -p ${feat_recog_dir}
+        feat_recog_dir=${dumpdir}/${rtask}/delta${do_delta}
+        mkdir -p ${feat_recog_dir}
         dump.sh --cmd "$train_cmd" --nj 8 --do_delta $do_delta \
             data/${rtask}/feats.scp data/${train_set}/cmvn.ark exp/dump_feats/recog/${rtask} \
             ${feat_recog_dir}
@@ -195,8 +196,79 @@ if [ ${stage} -le 2 ]; then
     done
 fi
 
+taco_feat_tr_dir=${dumpdir}/taco_${train_set}/delta${do_delta};mkdir -p ${taco_feat_tr_dir}
+taco_feat_dt_dir=${dumpdir}/taco_${train_dev}/delta${do_delta};mkdir -p ${taco_feat_dt_dir}
 if [ ${stage} -le 3 ]; then
-    echo "stage 3: x-vector extraction"
+    echo "stage 3: Tacotron Feature Generation"
+    fbankdir=taco_fbank
+    # Generate the fbank features; by default 80-dimensional fbanks with pitch
+    # on each frame
+    for x in test train; do
+        utils/copy_data_dir.sh data/${x} data/taco_${x}
+        # Using librosa
+        local/make_fbank.sh --cmd "${train_cmd}" --nj 8 \
+            --fs ${fs} --fmax "${fmax}" --fmin "${fmin}" \
+            --n_mels ${n_mels} --n_fft ${taco_n_fft} \
+            --n_shift ${taco_n_shift} --win_length $taco_win_length \
+            data/taco_${x} exp/taco_make_fbank/${x} ${fbankdir}
+    done
+
+    # make a dev set
+    utils/subset_data_dir.sh --first data/taco_train 100 data/taco_${train_dev}
+    n=$[`cat data/taco_train/text | wc -l` - 100]
+    utils/subset_data_dir.sh --last data/taco_train ${n} data/taco_${train_set}
+
+    # compute global CMVN
+    compute-cmvn-stats scp:data/taco_${train_set}/feats.scp \
+            data/taco_${train_set}/cmvn.ark
+
+    # Dump features
+    dump.sh --cmd "$train_cmd" --nj 8 --do_delta $do_delta \
+        data/taco_${train_set}/feats.scp \
+        data/taco_${train_set}/cmvn.ark exp/taco_dump_feats/train ${taco_feat_tr_dir}
+    dump.sh --cmd "$train_cmd" --nj 8 --do_delta $do_delta \
+        data/taco_${train_dev}/feats.scp \
+        data/taco_${train_set}/cmvn.ark exp/taco_dump_feats/dev ${taco_feat_dt_dir}
+    for rtask in ${recog_set}; do
+        # FIXME: Need to compose the path dynamically here, error prone    
+        feat_recog_dir=${dumpdir}/taco_${rtask}/delta${do_delta}
+        mkdir -p ${feat_recog_dir}
+        dump.sh --cmd "$train_cmd" --nj 8 --do_delta $do_delta \
+            data/taco_${rtask}/feats.scp \
+            data/taco_${train_set}/cmvn.ark exp/dump_feats/recog/taco_${rtask} \
+            ${feat_recog_dir}
+    done
+
+    # Append data to jsons
+    # feats.scp  spk2utt  text  utt2spk  wav.scp
+
+    # Update json
+    python local/data_io.py \
+        --in-scp-file data/taco_${train_set}/feats.scp \
+        --ark-class matrix \
+        --input-name input2 \
+        --in-json-file ${feat_tr_dir}/data.json \
+        --action add-scp-data-to-input \
+        --verbose 1
+    python local/data_io.py \
+        --in-scp-file data/taco_${train_dev}/feats.scp \
+        --ark-class matrix \
+        --input-name input2 \
+        --in-json-file ${feat_dt_dir}/data.json \
+        --action add-scp-data-to-input \
+        --verbose 1
+    python local/data_io.py \
+        --in-scp-file data/taco_test/feats.scp \
+        --ark-class matrix \
+        --input-name input2 \
+        --in-json-file ${dumpdir}/test/delta${do_delta}/data.json \
+        --action add-scp-data-to-input \
+        --verbose 1
+
+fi
+
+if [ ${stage} -le 4 ]; then
+    echo "stage 4: x-vector extraction"
 
     # Make MFCCs and compute the energy-based VAD for each dataset
     mfccdir=mfcc
@@ -231,6 +303,7 @@ if [ ${stage} -le 3 ]; then
             $nnet_dir/xvectors_${name}
     done
 
+    # Append data to jsons
     # feats.scp  spk2utt  text  utt2spk  wav.scp
 
     # make a dev set from train
@@ -243,10 +316,29 @@ if [ ${stage} -le 3 ]; then
     cp ${nnet_dir}/xvectors_test/xvector.scp ${nnet_dir}/xvectors_test/feats.scp
 
     # Update json
-    local/update_json.sh ${dumpdir}/${train_set}/delta${do_delta}/data.json ${nnet_dir}/xvectors_${train_set}/feats.scp 
-    # This should be recog set
-    local/update_json.sh ${dumpdir}/${train_dev}/delta${do_delta}/data.json ${nnet_dir}/xvectors_${train_dev}/feats.scp
-    local/update_json.sh ${dumpdir}/test/delta${do_delta}/data.json ${nnet_dir}/xvectors_test/feats.scp
+    python local/data_io.py \
+        --action add-scp-data-to-input \
+        --in-scp-file ${nnet_dir}/xvectors_${train_set}/feats.scp \
+        --ark-class vector \
+        --input-name input3 \
+        --in-json-file ${dumpdir}/${train_set}/delta${do_delta}/data.json \
+        --verbose 1
+
+    python local/data_io.py \
+        --in-scp-file ${nnet_dir}/xvectors_${train_dev}/feats.scp \
+        --ark-class vector \
+        --input-name input3 \
+        --in-json-file ${dumpdir}/${train_dev}/delta${do_delta}/data.json \
+        --action add-scp-data-to-input \
+        --verbose 1
+
+    python local/data_io.py \
+        --action add-scp-data-to-input \
+        --in-scp-file ${nnet_dir}/xvectors_test/feats.scp \
+        --ark-class vector \
+        --input-name input3 \
+        --in-json-file ${dumpdir}/test/delta${do_delta}/data.json \
+        --verbose 1
 
 fi
 
@@ -260,8 +352,8 @@ else
 fi
 mkdir -p ${expdir}
 
-if [ ${stage} -le 4 ]; then
-    echo "stage 4: Network Training"
+if [ ${stage} -le 5 ]; then
+    echo "stage 5: Network Training"
     ${cuda_cmd} --gpu ${ngpu} ${expdir}/train.log \
         asr_train.py \
         --ngpu ${ngpu} \
@@ -295,8 +387,8 @@ if [ ${stage} -le 4 ]; then
         --expected-loss tts
 fi
 
-if [ ${stage} -le 5 ]; then
-    echo "stage 5: Decoding"
+if [ ${stage} -le 6 ]; then
+    echo "stage 8: Decoding"
     nj=8
 
     for rtask in ${recog_set}; do

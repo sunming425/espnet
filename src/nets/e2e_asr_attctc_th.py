@@ -156,6 +156,8 @@ class ExpectedLoss(torch.nn.Module):
         self.maxlenratio = args.sample_maxlenratio
         self.minlenratio = args.sample_minlenratio
         self.sample_scaling = args.sample_scaling
+        # needed for Tacotron loss
+        self.ngpu = args.ngpu
 
     def forward(self, x):
         '''Loss forward
@@ -168,6 +170,7 @@ class ExpectedLoss(torch.nn.Module):
                                          n_samples_per_input=self.n_samples_per_input,
                                          maxlenratio=self.maxlenratio,
                                          minlenratio=self.minlenratio)
+
         acc = 0.
         loss = None
         alpha = self.mtlalpha
@@ -193,10 +196,26 @@ class ExpectedLoss(torch.nn.Module):
             for i in six.moves.range(batch):
                 for j in six.moves.range(self.n_samples_per_input):
                     y_str = "".join([self.char_list[int(idx)] for idx in ys[i * self.n_samples_per_input + j]])
-                    print "generate[%d,%d]: %.4f %.4f " % (i, j, logprob[i, j], prob[i,j]) + y_str
+                    print("generate[%d,%d]: %.4f %.4f " % (i, j, logprob[i, j], prob[i,j]) + y_str)
+
+        # Construct a Tacotron batch from ESPNet batch and the samples
+        from taco_cycle_consistency import convert_espnet_to_taco_batch
+        taco_batch = convert_espnet_to_taco_batch(
+            x,
+            ys,
+            batch,
+            self.n_samples_per_input,
+            self.ngpu,
+            # FIXME: This is hardcoded for simplicity
+            use_speaker_embedding=True,
+        )
+
         # compute expected loss with another loss function
-        #self.loss = torch.sum(self.loss_fn(x, ys) * Variable(prob.view(-1))) / batch
-        self.loss = torch.sum(loss * Variable(prob.view(-1))) / batch
+        # FIXME: Need to for over samples
+        # FIXME: *** KeyError: 'Given observer is not registered to the reporter.'
+        # +192 src/nets/e2e_tts_th.py
+        import ipdb;ipdb.set_trace(context=30)
+        self.loss = torch.sum(self.loss_fn(*taco_batch) * Variable(prob.view(-1))) / batch
 
         loss_data = self.loss.data[0] if torch_is_old else float(self.loss)
         if loss_data < CTC_LOSS_THRESHOLD and not math.isnan(loss_data):
@@ -452,6 +471,7 @@ class E2E(torch.nn.Module):
         '''
         # utt list of frame x dim
         xs = [d[1]['feat'] for d in data]
+
         # remove 0-output-length utterances
         tids = [d[1]['output'][0]['tokenid'].split() for d in data]
         filtered_index = filter(lambda i: len(tids[i]) > 0, range(len(xs)))

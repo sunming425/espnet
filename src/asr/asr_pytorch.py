@@ -225,21 +225,22 @@ def train(args):
     if args.prior_model:
         model.load_state_dict(torch.load(args.prior_model))
     if args.expected_loss:
-        # need to specify a loss function (loss_fn) to compute the expected loss
+        # need to specify a loss function (loss_fn) to compute the expected
+        # loss
         if args.expected_loss == 'tts':
-            from e2e_tts_th import TacotronRewardLoss
-            assert args.tts_model, \
-                "Need to provide --tts-model together with --expected-loss tts"
-            # Read model
-            with open(args.tts_model, 'rb') as f:
-                idim_taco, odim_taco, train_args_taco = pickle.load(f)
-            loss_fn = TacotronRewardLoss(
-                idim=idim_taco,
-                odim=odim_taco,
-                train_args=train_args_taco
+            from taco_cycle_consistency import (
+                load_tacotron_loss,
+                sanity_check_json
             )
+            assert args.tts_model, \
+                "Need to provide --tts-model and set --expected-loss tts"
+            sanity_check_json(valid_json)
+            loss_fn= load_tacotron_loss(args.tts_model)
+
         else:
-            raise NotImplemented('Unknown expected loss: %s' % args.expected_loss)
+            raise NotImplemented(
+                'Unknown expected loss: %s' % args.expected_loss
+            )
         model = ExpectedLoss(model.predictor, args, loss_fn=loss_fn)
 
     # write model config
