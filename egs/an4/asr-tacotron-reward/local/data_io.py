@@ -192,6 +192,18 @@ def argument_parser(sys_argv):
     return args
 
 
+# For future use: Code to load model
+# import torch
+# # Config
+# idim, odim, train_args = pickle.load(open('model.conf'))
+# # Model
+# fid = open('model.acc.best')
+# def cpu_loader(storage, location):
+#     return storage
+# model = torch.load(fid, map_location=cpu_loader)
+# import ipdb;ipdb.set_trace(context=30)
+
+
 if __name__ == '__main__':
 
     # Argument Handling
