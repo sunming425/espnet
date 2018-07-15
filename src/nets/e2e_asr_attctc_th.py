@@ -212,10 +212,7 @@ class ExpectedLoss(torch.nn.Module):
 
         # compute expected loss with another loss function
         # FIXME: Need to for over samples
-        # FIXME: *** KeyError: 'Given observer is not registered to the reporter.'
-        # +192 src/nets/e2e_tts_th.py
-        import ipdb;ipdb.set_trace(context=30)
-        self.loss = torch.sum(self.loss_fn(*taco_batch) * Variable(prob.view(-1))) / batch
+        self.loss = torch.sum(self.loss_fn(*taco_batch).mean(2).mean(1) * Variable(prob.view(-1))) / batch
 
         loss_data = self.loss.data[0] if torch_is_old else float(self.loss)
         if loss_data < CTC_LOSS_THRESHOLD and not math.isnan(loss_data):

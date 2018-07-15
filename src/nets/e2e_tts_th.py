@@ -122,14 +122,24 @@ class Tacotron2Loss(torch.nn.Module):
     :param torch.nn.Module model: tacotron2 model
     :param bool use_masking: whether to mask padded part in loss calculation
     :param float bce_pos_weight: weight of positive sample of stop token (only for use_masking=True)
+    :param bool report: Use reporter to log loss values (deafult true)
+    :param bool reduce: Reduce the loss over the batch size
     """
 
-    def __init__(self, model, use_masking=True, bce_pos_weight=20.0):
+    def __init__(self, model, use_masking=True, bce_pos_weight=20.0,
+                 report=True, reduce_loss=True, use_bce_loss=True):
         super(Tacotron2Loss, self).__init__()
         self.model = model
         self.use_masking = use_masking
         self.bce_pos_weight = bce_pos_weight
-        self.reporter = Reporter()
+        self.report = report
+        if reduce_loss:
+            assert not use_bce_loss, \
+                "reduce = True can not be used with bce_loss = True"
+        self.use_bce_loss = use_bce_loss
+        self.reduce = reduce_loss
+        if self.report:
+            self.reporter = Reporter()
 
     def forward(self, xs, ilens, ys, labels, olens=None, spembs=None):
         """TACOTRON2 LOSS FORWARD CALCULATION
@@ -171,25 +181,42 @@ class Tacotron2Loss(torch.nn.Module):
             logits = logits.masked_select(mask[:, :, 0])
             weights = weights.masked_select(mask[:, :, 0]) if weights is not None else None
             # calculate loss
-            l1_loss = F.l1_loss(after_outs, ys) + F.l1_loss(before_outs, ys)
-            mse_loss = F.mse_loss(after_outs, ys) + F.mse_loss(before_outs, ys)
-            bce_loss = F.binary_cross_entropy_with_logits(logits, labels, weights)
-            loss = l1_loss + mse_loss + bce_loss
+            l1_loss = F.l1_loss(after_outs, ys, reduce=self.reduce) + F.l1_loss(before_outs, ys, reduce=self.reduce)
+            mse_loss = F.mse_loss(after_outs, ys, reduce=self.reduce) + F.mse_loss(before_outs, ys, reduce=self.reduce)
+            if self.use_bce_loss:
+                bce_loss = F.binary_cross_entropy_with_logits(logits, labels, weights)
+                loss = l1_loss + mse_loss + bce_loss
+            else:
+                loss = l1_loss + mse_loss
         else:
             # calculate loss
-            l1_loss = F.l1_loss(after_outs, ys) + F.l1_loss(before_outs, ys)
-            mse_loss = F.mse_loss(after_outs, ys) + F.mse_loss(before_outs, ys)
-            bce_loss = F.binary_cross_entropy_with_logits(logits, labels)
-            loss = l1_loss + mse_loss + bce_loss
+            l1_loss = F.l1_loss(after_outs, ys, reduce=self.reduce) + F.l1_loss(before_outs, ys, reduce=self.reduce)
+            mse_loss = F.mse_loss(after_outs, ys, reduce=self.reduce) + F.mse_loss(before_outs, ys, reduce=self.reduce)
+            if self.use_bce_loss:
+                bce_loss = F.binary_cross_entropy_with_logits(logits, labels)
+                loss = l1_loss + mse_loss + bce_loss
+            else:
+                loss = l1_loss + mse_loss
 
         # report loss values for logging
         loss_data = loss.data[0] if torch_is_old else loss.item()
         l1_loss_data = l1_loss.data[0] if torch_is_old else l1_loss.item()
-        bce_loss_data = bce_loss.data[0] if torch_is_old else bce_loss.item()
         mse_loss_data = mse_loss.data[0] if torch_is_old else mse_loss.item()
-        logging.debug("loss = %.3e (bce: %.3e, l1: %.3e, mse: %.3e)" % (
-            loss_data, bce_loss_data, l1_loss_data, mse_loss_data))
-        self.reporter.report(l1_loss_data, mse_loss_data, bce_loss_data, loss_data)
+
+        # TODO: The logic here could be simplified
+        if self.reduce:
+            if self.use_bce_loss:
+                bce_loss_data = bce_loss.data[0] if torch_is_old else bce_loss.item()
+                logging.debug("loss = %.3e (bce: %.3e, l1: %.3e, mse: %.3e)" % (
+                    loss_data, bce_loss_data, l1_loss_data, mse_loss_data))
+                if self.report:
+                    self.reporter.report(l1_loss_data, mse_loss_data, bce_loss_data, loss_data)
+
+            else:
+                logging.debug("loss = %.3e (l1: %.3e, mse: %.3e)" % (
+                    loss_data, l1_loss_data, mse_loss_data))
+                if self.report:
+                    self.reporter.report(l1_loss_data, mse_loss_data, loss_data)
 
         return loss
 

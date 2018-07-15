@@ -58,7 +58,11 @@ def TacotronRewardLoss(idim=None, odim=None, train_args=None,
     return Tacotron2Loss(
         model=tacotron2,
         use_masking=use_masking,
-        bce_pos_weight=bce_pos_weight
+        bce_pos_weight=bce_pos_weight,
+        report=False,
+        # These two are needed together
+        reduce_loss=False,
+        use_bce_loss=False
     )
 
 
@@ -71,7 +75,7 @@ def load_tacotron_loss(tts_model_file):
     return TacotronRewardLoss(
         idim=idim_taco,
         odim=odim_taco,
-        train_args=train_args_taco
+        train_args=train_args_taco,
     )
 
 
@@ -133,7 +137,8 @@ def convert_espnet_to_taco_batch(x, ys, batch, n_samples_per_input,
                     u'text': None,
                     u'token': None,
                     u'tokenid': " ".join(
-                        map(str, list(text_sample.data.numpy()))
+                        # FIXME: This is unefficient
+                        map(str, list(text_sample.data.cpu().numpy()))
                     )
                 }],
                 u'utt2spk': x[batch_index][1][u'utt2spk']
