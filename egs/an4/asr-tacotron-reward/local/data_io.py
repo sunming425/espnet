@@ -146,6 +146,7 @@ def add_scp_data_to_input(in_data_json, in_scp, input_name, sent2dim, sent2len):
 def argument_parser(sys_argv):
 
     parser = argparse.ArgumentParser('Manipulate Kaldi/ESPNet data')
+    # INPUTS
     parser.add_argument(
         '--in-scp-file',
         type=str,
@@ -166,6 +167,12 @@ def argument_parser(sys_argv):
         type=str,
         help='name of the feature we wil act upon'
     )
+    parser.add_argument(
+        '--in-pytorch-model',
+        type=str,
+        help='Pytorch model file'
+    )
+    # OUTPUTS / MODIFIERS
     parser.add_argument(
         '--out-json-file',
         type=str,
@@ -219,6 +226,14 @@ if __name__ == '__main__':
     if args.in_json_file:
         with codecs.open(args.in_json_file, 'r', 'utf-8') as fid:
             in_data_json = json.load(fid)
+
+    # Read pytorch model
+    if args.in_pytorch_model:
+        import torch
+        def cpu_loader(storage, location):
+            return storage
+        with open(args.in_pytorch_model) as fid:
+           in_pytorch_model = torch.load(fid, map_location=cpu_loader)
 
     if args.action == 'add-scp-data-to-input':
 
