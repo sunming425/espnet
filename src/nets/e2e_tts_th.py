@@ -133,9 +133,9 @@ class Tacotron2Loss(torch.nn.Module):
         self.use_masking = use_masking
         self.bce_pos_weight = bce_pos_weight
         self.report = report
-        if reduce_loss:
+        if not reduce_loss:
             assert not use_bce_loss, \
-                "reduce = True can not be used with bce_loss = True"
+                "reduce = False can not be used with bce_loss = True"
         self.use_bce_loss = use_bce_loss
         self.reduce = reduce_loss
         if self.report:
