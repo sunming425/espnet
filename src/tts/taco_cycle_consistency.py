@@ -110,10 +110,17 @@ def convert_espnet_to_taco_batch(x, ys, batch, n_samples_per_input,
     else:
         gpu_id = [-1]
 
+    # Tacotron converter
+    taco_converter = CustomConverter(
+        gpu_id,
+        use_speaker_embedding=use_speaker_embedding
+    )
+
     # Reformat batch
     samples_batch = []
-    for batch_index in range(batch):
-        for sample_index in range(n_samples_per_input):
+    for sample_index in range(n_samples_per_input):
+        batch_sample = []
+        for batch_index in range(batch):
             text_sample = ys[batch_index + sample_index]
             content = {
                 u'input': [
@@ -137,18 +144,11 @@ def convert_espnet_to_taco_batch(x, ys, batch, n_samples_per_input,
                     u'text': None,
                     u'token': None,
                     u'tokenid': " ".join(
-                        # FIXME: This is unefficient
                         map(str, list(text_sample.data.cpu().numpy()))
                     )
                 }],
                 u'utt2spk': x[batch_index][1][u'utt2spk']
             }
-            samples_batch.append((x[batch_index][0], content))
-
-    # Tacotron converter
-    taco_converter = CustomConverter(
-        gpu_id,
-        use_speaker_embedding=use_speaker_embedding
-    )
-
-    return taco_converter([samples_batch], True)
+            batch_sample.append((x[batch_index][0], content))
+        samples_batch.append(taco_converter([batch_sample], True))
+    return samples_batch

@@ -196,23 +196,36 @@ class ExpectedLoss(torch.nn.Module):
             for i in six.moves.range(batch):
                 for j in six.moves.range(self.n_samples_per_input):
                     y_str = "".join([self.char_list[int(idx)] for idx in ys[i * self.n_samples_per_input + j]])
-                    print("generate[%d,%d]: %.4f %.4f " % (i, j, logprob[i, j], prob[i,j]) + y_str)
+                    #print("generate[%d,%d]: %.4f %.4f " % (i, j, logprob[i, j], prob[i,j]) + y_str)
 
-        # Construct a Tacotron batch from ESPNet batch and the samples
-        from taco_cycle_consistency import convert_espnet_to_taco_batch
-        taco_batch = convert_espnet_to_taco_batch(
-            x,
-            ys,
-            batch,
-            self.n_samples_per_input,
-            self.ngpu,
-            # FIXME: This is hardcoded for simplicity
-            use_speaker_embedding=True,
-        )
+        reward = 'Tacotron'
+        if reward == 'Tacotron':
 
-        # compute expected loss with another loss function
-        # FIXME: Need to for over samples
-        self.loss = torch.sum(self.loss_fn(*taco_batch).mean(2).mean(1) * Variable(prob.view(-1))) / batch
+            # Construct a Tacotron batch from ESPNet batch and the samples
+            from taco_cycle_consistency import convert_espnet_to_taco_batch
+            taco_sample_batches = convert_espnet_to_taco_batch(
+                x,
+                ys,
+                batch,
+                self.n_samples_per_input,
+                self.ngpu,
+                # FIXME: This is hardcoded for simplicity
+                use_speaker_embedding=True,
+            )
+
+            # Compute
+            loss_per_sample = []
+            for taco_sample in taco_sample_batches:
+                loss_per_sample.append(
+                    self.loss_fn(*taco_sample).mean(2).mean(1)
+                )
+
+        else:
+            raise NotImplementedError
+
+        self.loss = torch.sum(
+            torch.cat(loss_per_sample) * Variable(prob.view(-1))
+        ) / batch
 
         loss_data = self.loss.data[0] if torch_is_old else float(self.loss)
         if loss_data < CTC_LOSS_THRESHOLD and not math.isnan(loss_data):
