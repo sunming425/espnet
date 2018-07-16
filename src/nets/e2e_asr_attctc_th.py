@@ -217,6 +217,7 @@ class ExpectedLoss(torch.nn.Module):
             loss_per_sample = []
             for taco_sample in taco_sample_batches:
                 loss_per_sample.append(
+                    # taco_sample.data
                     self.loss_fn(*taco_sample).mean(2).mean(1)
                 )
 
