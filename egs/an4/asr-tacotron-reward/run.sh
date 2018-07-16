@@ -97,6 +97,12 @@ if [ ! -z $gpu ]; then
     fi
 fi
 
+# Check trained tacotron model exists
+if [ ! -f ${tacotron_model} ];then
+    echo "Missing trained tacotron model in ../tts1/!\n\n${tacotron_model}\n"    
+    exit
+fi
+
 # Set bash to 'debug' mode, it will exit on :
 # -e 'error', -u 'undefined variable', -o ... 'error in pipeline', -x 'print commands',
 set -e
