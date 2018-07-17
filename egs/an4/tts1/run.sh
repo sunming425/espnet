@@ -289,7 +289,7 @@ else
 fi
 
 if [ ${stage} -le 4 ];then
-    echo "stage 3: Text-to-speech model training"
+    echo "stage 4: Text-to-speech model training"
     tr_json=${feat_tr_dir}/data.json
     dt_json=${feat_dt_dir}/data.json
     ${cuda_cmd} --gpu ${ngpu} ${expdir}/train.log \
