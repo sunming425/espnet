@@ -1,0 +1,3 @@
+dictionary: data/lang_1char/train_units.txt
+stage 3: x-vector extraction
+copy_data_dir.sh: no such file data/train/utt2spk
