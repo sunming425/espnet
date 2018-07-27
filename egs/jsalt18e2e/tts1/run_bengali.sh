@@ -76,7 +76,7 @@ bce_pos_weight=1.0
 
 
 # minibatch related
-batchsize=64
+batchsize=32
 batch_sort_key="output" # empty or input or output (if empty, shuffled batch will be used)
 maxlen_in=150     # if input length  > maxlen_in, batchsize is reduced (if batch_sort_key="", not effect)
 maxlen_out=400    # if output length > maxlen_out, batchsize is reduced (if batch_sort_key="", not effect)
@@ -100,7 +100,6 @@ minlenratio=0.0
 
 # exp tag
 tag="" # tag for managing experiments.
-exptag="babel5filter"
 
 langs="101 102 103 104 105 106 202 203 204 205 206 207 301 302 303 304 305 306 401 402 403"
 recog="107 201 307 404"
@@ -124,19 +123,16 @@ tag="" # tag for managing experiments.
 
 # data set
 # non-target languages: cantonese bengali pashto turkish vietnamese haitian tamil kurmanji tokpisin georgian
-train_set=tr_${exptag}
-train_dev=dt_${exptag}
+train_set=tr_babel1_bengali
+train_dev=dt_babel1_bengali
 # non-target
-recog_set="dt_babel_cantonese et_babel_cantonese dt_babel_bengali et_babel_bengali dt_babel_pashto et_babel_pashto dt_babel_turkish et_babel_turkish\
- dt_babel_vietnamese et_babel_vietnamese" # dt_babel_haitian et_babel_haitian\
+recog_set="dt_babel_bengali et_babel_bengali" # dt_babel_haitian et_babel_haitian\
 # dt_babel_tamil et_babel_tamil dt_babel_kurmanji et_babel_kurmanji dt_babel_tokpisin et_babel_tokpisin dt_babel_georgian et_babel_georgian"
 # target
-recog_set="dt_babel_cantonese dt_babel_bengali dt_babel_pashto dt_babel_turkish dt_babel_vietnamese dt_babel_assamese dt_babel_tagalog" #dt_babel_swahili et_babel_swahili dt_babel_lao et_babel_lao dt_babel_zulu et_babel_zulu" # dt_csj_japanese et_csj_japanese_1 et_csj_japanese_2 et_csj_japanese_3 dt_libri_english_clean dt_libri_english_other et_libri_english_clean et_libri_english_other
+recog_set="dt_babel_bengali et_babel_bengali" #dt_babel_swahili et_babel_swahili dt_babel_lao et_babel_lao dt_babel_zulu et_babel_zulu" # dt_csj_japanese et_csj_japanese_1 et_csj_japanese_2 et_csj_japanese_3 dt_libri_english_clean dt_libri_english_other et_libri_english_clean et_libri_english_other
 
 # whole set
-#recog_set="dt_babel_cantonese et_babel_cantonese dt_babel_bengali et_babel_bengali dt_babel_pashto et_babel_pashto dt_babel_turkish et_babel_turkish dt_babel_vietnamese et_babel_vietnamese dt_babel_assamese et_babel_assamese dt_babel_tagalog et_babel_tagalog"
-
-# dt_babel_bengali et_babel_bengali dt_babel_pashto et_babel_pashto dt_babel_turkish et_babel_turkish  dt_babel_vietnamese et_babel_vietnamese dt_babel_haitian et_babel_haitian dt_babel_swahili et_babel_swahili dt_babel_lao et_babel_lao dt_babel_tagalog et_babel_tagalog  dt_babel_tamil et_babel_tamil dt_babel_kurmanji et_babel_kurmanji dt_babel_zulu et_babel_zulu dt_babel_tokpisin et_babel_tokpisin dt_babel_georgian et_babel_georgian" #  dt_csj_japanese et_csj_japanese_1 et_csj_japanese_2 et_csj_japanese_3 dt_libri_english_clean dt_libri_english_other et_libri_english_clean et_libri_english_other
+recog_set="dt_babel_bengali et_babel_bengali" # dt_babel_bengali et_babel_bengali dt_babel_pashto et_babel_pashto dt_babel_turkish et_babel_turkish  dt_babel_vietnamese et_babel_vietnamese dt_babel_haitian et_babel_haitian dt_babel_swahili et_babel_swahili dt_babel_lao et_babel_lao dt_babel_tagalog et_babel_tagalog  dt_babel_tamil et_babel_tamil dt_babel_kurmanji et_babel_kurmanji dt_babel_zulu et_babel_zulu dt_babel_tokpisin et_babel_tokpisin dt_babel_georgian et_babel_georgian" #  dt_csj_japanese et_csj_japanese_1 et_csj_japanese_2 et_csj_japanese_3 dt_libri_english_clean dt_libri_english_other et_libri_english_clean et_libri_english_other
 
 # subset options
 # select the number of speakers for subset training experiments. (e.g. 1000; select 1000 speakers). Default: select the whole train set.
@@ -145,7 +141,7 @@ subset_num_spk=""
 . utils/parse_options.sh || exit 1;
 
 # data set
-train_set=tr_${exptag}${subset_num_spk:+_${subset_num_spk}spk}
+train_set=tr_babel1_bengali${subset_num_spk:+_${subset_num_spk}spk}
 
 # data directories
 #csjdir=../../csj
@@ -209,7 +205,7 @@ if [ ${stage} -le 0 ]; then
     # utils/copy_data_dir.sh --utt-suffix -${lang_code} ../../librispeech/asr1/data/test_other data/et_${lang_code}_other
 
     # Babel
-    for x in 101-cantonese 102-assamese 103-bengali 104-pashto 105-turkish 106-tagalog 107-vietnamese; do #101-cantonese 102-assamese 103-bengali 104-pashto 105-turkish 106-tagalog 107-vietnamese 201-haitian 202-swahili 203-lao 204-tamil 205-kurmanji 206-zulu 207-tokpisin 404-georgian; do
+    for x in 103-bengali; do #101-cantonese 102-assamese 103-bengali 104-pashto 105-turkish 106-tagalog 107-vietnamese 201-haitian 202-swahili 203-lao 204-tamil 205-kurmanji 206-zulu 207-tokpisin 404-georgian; do
 	langid=`echo $x | cut -f 1 -d"-"`
 	lang_code=`echo $x | cut -f 2 -d"-"`
 	if [ ! -d "$babeldir/tts1_${lang_code}/data" ]; then
@@ -226,21 +222,21 @@ fi
 feat_tr_dir=${dumpdir}/${train_set}_${train_set}/delta${do_delta}; mkdir -p ${feat_tr_dir}
 feat_dt_dir=${dumpdir}/${train_dev}_${train_set}/delta${do_delta}; mkdir -p ${feat_dt_dir}
 if [ ${stage} -le 1 ]; then
-    utils/combine_data.sh data/tr_${exptag}_org data/tr_babel_cantonese data/tr_babel_bengali data/tr_babel_pashto data/tr_babel_turkish data/tr_babel_vietnamese #data/tr_babel_cantonese data/tr_babel_bengali data/tr_babel_pashto data/tr_babel_turkish data/tr_babel_vietnamese data/tr_babel_haitian data/tr_babel_tamil data/tr_babel_kurmanji data/tr_babel_tokpisin data/tr_babel_georgian
-    utils/combine_data.sh data/dt_${exptag}_org data/dt_babel_cantonese data/dt_babel_bengali data/dt_babel_pashto data/dt_babel_turkish data/dt_babel_vietnamese #data/dt_babel_cantonese data/dt_babel_bengali data/dt_babel_pashto data/dt_babel_turkish data/dt_babel_vietnamese data/dt_babel_haitian data/dt_babel_tamil data/dt_babel_kurmanji data/dt_babel_tokpisin data/dt_babel_georgian
+    utils/combine_data.sh data/tr_babel1_bengali_org data/tr_babel_bengali  #data/tr_babel_cantonese data/tr_babel_bengali data/tr_babel_pashto data/tr_babel_turkish data/tr_babel_vietnamese data/tr_babel_haitian data/tr_babel_tamil data/tr_babel_kurmanji data/tr_babel_tokpisin data/tr_babel_georgian
+    utils/combine_data.sh data/dt_babel1_bengali_org data/dt_babel_bengali  #data/dt_babel_cantonese data/dt_babel_bengali data/dt_babel_pashto data/dt_babel_turkish data/dt_babel_vietnamese data/dt_babel_haitian data/dt_babel_tamil data/dt_babel_kurmanji data/dt_babel_tokpisin data/dt_babel_georgian
 
     if [ ! -z $subset_num_spk ]; then
         # create a trainng subset with ${subset_num_spk} speakers (in total 7470)
-        head -n $subset_num_spk <(utils/shuffle_list.pl data/tr_babel5_org/spk2utt | awk '{print $1}') > data/tr_babel5_org/spk_list_${subset_num_spk}spk
+        head -n $subset_num_spk <(utils/shuffle_list.pl data/tr_babel1_bengali_org/spk2utt | awk '{print $1}') > data/tr_babel1_bengali_org/spk_list_${subset_num_spk}spk
         utils/subset_data_dir.sh \
-        --spk-list data/tr_babel5_org/spk_list_${subset_num_spk}spk \
-        data/tr_babel5_org data/${train_set}_org
+        --spk-list data/tr_babel1_bengali_org/spk_list_${subset_num_spk}spk \
+        data/tr_babel1_bengali_org data/${train_set}_org
     fi
 
-    # remove utt having more than 3000 frames or less than 10 frames or
-    # remove utt having more than 400 characters or no more than 0 characters
-    remove_longshortdata.sh --maxframes 1200 --maxchars 200 data/${train_set}_org data/${train_set}
-    remove_longshortdata.sh --maxframes 1200 --maxchars 200 data/${train_dev}_org data/${train_dev}
+    # remove utt having more than 2000 frames or less than 10 frames or
+    # remove utt having more than 200 characters or no more than 0 characters
+    remove_longshortdata.sh --maxframes 2000 --maxchars 200 data/${train_set}_org data/${train_set}
+    remove_longshortdata.sh --maxframes 2000 --maxchars 200 data/${train_dev}_org data/${train_dev}
 
     # rm -rf data/${train_set}
     # cp -r data/${train_set}_org data/${train_set}
@@ -276,14 +272,14 @@ if [ ${stage} -le 1 ]; then
     done
 fi
 
-dict=data/lang_1char_${exptag}/train_units.txt
-nlsyms=data/lang_1char_${exptag}/non_lang_syms.txt
+dict=data/lang_1char/train_units.txt
+nlsyms=data/lang_1char/non_lang_syms.txt
 echo "dictionary: ${dict}"
 
 if [ ${stage} -le 2 ]; then
     ### Task dependent. You have to check non-linguistic symbols used in the corpus.
     echo "stage 2: Dictionary and Json Data Preparation"
-    mkdir -p data/lang_1char_${exptag}/
+    mkdir -p data/lang_1char/
     
     # echo "make a non-linguistic symbol list for all languages"
     # cut -f 2- data/tr_*/text | grep -o -P '\[.*?\]|\<.*?\>' | sort | uniq > ${nlsyms}
@@ -310,7 +306,7 @@ fi
 if [ ${stage} -le 3 ]; then
     echo "stage 3: x-vector extraction"
     # Babel
-    for x in 101-cantonese 102-assamese 103-bengali 104-pashto 105-turkish 106-tagalog 107-vietnamese; do #101-cantonese 102-assamese 103-bengali 104-pashto 105-turkish 106-tagalog 107-vietnamese 201-haitian 202-swahili 203-lao 204-tamil 205-kurmanji 206-zulu 207-tokpisin 404-georgian; do
+    for x in 103-bengali; do #101-cantonese 102-assamese 103-bengali 104-pashto 105-turkish 106-tagalog 107-vietnamese 201-haitian 202-swahili 203-lao 204-tamil 205-kurmanji 206-zulu 207-tokpisin 404-georgian; do
 	langid=`echo $x | cut -f 1 -d"-"`
 	lang_code=`echo $x | cut -f 2 -d"-"`
 	if [ ! -d "$babeldir/tts1_${lang_code}/data" ]; then
@@ -319,41 +315,40 @@ if [ ${stage} -le 3 ]; then
 	fi
 	
 	pathPrefix="/export/b11/msun/espnet_ming/egs/babel/tts1_${lang_code}/"
-	
+
 	rm -rf $babeldir/tts1_${lang_code}/data/train_xvector
 	cp -r $babeldir/tts1_${lang_code}/data/train ../../babel/tts1_${lang_code}/data/train_xvector
 	cat $babeldir/tts1_${lang_code}/exp/xvector_nnet_1a/xvectors_train/feats.scp | awk -v var="${pathPrefix}" '{print $1" "var$2}' > $babeldir/tts1_${lang_code}/data/train_xvector/feats.scp
 	utils/fix_data_dir.sh ${babeldir}/tts1_${lang_code}/data/train_xvector # filter files by common utterances
 	utils/copy_data_dir.sh --utt-suffix -${lang_code} ${babeldir}/tts1_${lang_code}/data/train_xvector data/tr_babel_${lang_code}_xvector
-	
+
 	rm -rf $babeldir/tts1_${lang_code}/data/dev_xvector
 	cp -r $babeldir/tts1_${lang_code}/data/dev ../../babel/tts1_${lang_code}/data/dev_xvector
 	cat $babeldir/tts1_${lang_code}/exp/xvector_nnet_1a/xvectors_dev/feats.scp | awk -v var="${pathPrefix}" '{print $1" "var$2}' > $babeldir/tts1_${lang_code}/data/dev_xvector/feats.scp
 	utils/fix_data_dir.sh ${babeldir}/tts1_${lang_code}/data/dev_xvector # filter files by common utterances
 	utils/copy_data_dir.sh --utt-suffix -${lang_code} ${babeldir}/tts1_${lang_code}/data/dev_xvector data/dt_babel_${lang_code}_xvector
-	
+
 	rm -rf $babeldir/tts1_${lang_code}/data/eval_${langid}_xvector
 	cp -r $babeldir/tts1_${lang_code}/data/eval_${langid} $babeldir/tts1_${lang_code}/data/eval_${langid}_xvector
 	cat $babeldir/tts1_${lang_code}/exp/xvector_nnet_1a/xvectors_eval_${langid}/feats.scp | awk -v var="${pathPrefix}" '{print $1" "var$2}' > $babeldir/tts1_${lang_code}/data/eval_${langid}_xvector/feats.scp
 	utils/fix_data_dir.sh ${babeldir}/tts1_${lang_code}/data/eval_${langid}_xvector # filter files by common utterances
 	utils/copy_data_dir.sh --utt-suffix -${lang_code} ${babeldir}/tts1_${lang_code}/data/eval_${langid}_xvector data/et_babel_${lang_code}_xvector
     done
-    
-    utils/combine_data.sh data/tr_${exptag}_org_xvector data/tr_babel_cantonese_xvector data/tr_babel_bengali_xvector data/tr_babel_pashto_xvector data/tr_babel_turkish_xvector data/tr_babel_vietnamese_xvector #data/tr_babel_cantonese data/tr_babel_bengali data/tr_babel_pashto data/tr_babel_turkish data/tr_babel_vietnamese data/tr_babel_haitian data/tr_babel_tamil data/tr_babel_kurmanji data/tr_babel_tokpisin data/tr_babel_georgian
-    utils/combine_data.sh data/dt_${exptag}_org_xvector data/dt_babel_cantonese_xvector data/dt_babel_bengali_xvector data/dt_babel_pashto_xvector data/dt_babel_turkish_xvector data/dt_babel_turkish_xvector #data/dt_babel_cantonese data/dt_babel_bengali data/dt_babel_pashto data/dt_babel_turkish data/dt_babel_vietnamese data/dt_babel_haitian data/dt_babel_tamil data/dt_babel_kurmanji data/dt_babel_tokpisin data/dt_babel_georgian
+
+    utils/combine_data.sh data/tr_babel1_bengali_org_xvector data/tr_babel_bengali_xvector #data/tr_babel_cantonese data/tr_babel_bengali data/tr_babel_pashto data/tr_babel_turkish data/tr_babel_vietnamese data/tr_babel_haitian data/tr_babel_tamil data/tr_babel_kurmanji data/tr_babel_tokpisin data/tr_babel_georgian
+    utils/combine_data.sh data/dt_babel1_bengali_org_xvector data/dt_babel_bengali_xvector #data/dt_babel_cantonese data/dt_babel_bengali data/dt_babel_pashto data/dt_babel_turkish data/dt_babel_vietnamese data/dt_babel_haitian data/dt_babel_tamil data/dt_babel_kurmanji data/dt_babel_tokpisin data/dt_babel_georgian
     
     # Update json
-    local/update_json.sh ${feat_tr_dir}/data.json data/tr_${exptag}_org_xvector/feats.scp
+    local/update_json.sh ${feat_tr_dir}/data.json data/tr_babel1_bengali_org_xvector/feats.scp
     # This should be recog set
-    local/update_json.sh ${feat_dt_dir}/data.json data/dt_${exptag}_org_xvector/feats.scp
-    # for rtask in ${recog_set}; do
-    # 	if [[ $rtask = *"dt_"* ]]; then # dev set
-    # 	    local/update_json.sh ${dumpdir}/${rtask}_${train_set}/delta${do_delta}/data.json data/dt_babel_${lang_code}_xvector/feats.scp
-    # 	else
-    # 	    local/update_json.sh ${dumpdir}/${rtask}_${train_set}/delta${do_delta}/data.json data/et_babel_${lang_code}_xvector/feats.scp
-    # 	fi
-    # 	local/update_json.sh ${dumpdir}/${rtask}_${train_set}/delta${do_delta}/data.json data/et_babel_${lang_code}_xvector/feats.scp
-    # done
+    local/update_json.sh ${feat_dt_dir}/data.json data/dt_babel1_bengali_org_xvector/feats.scp
+    for rtask in ${recog_set}; do
+	if [[ $rtask = *"dt_"* ]]; then # dev set
+	    local/update_json.sh ${dumpdir}/${rtask}_${train_set}/delta${do_delta}/data.json data/dt_babel_${lang_code}_xvector/feats.scp
+	else # eval set
+	    local/update_json.sh ${dumpdir}/${rtask}_${train_set}/delta${do_delta}/data.json data/et_babel_${lang_code}_xvector/feats.scp
+	fi
+    done
 fi
 
 
@@ -442,6 +437,7 @@ if [ ${stage} -le 4 ]; then
 	--maxlen-out ${maxlen_out} \
 	--epochs ${epochs}
 fi
+exit
 
 
 outdir=${expdir}/outputs_${model}_th${threshold}_mlr${minlenratio}-${maxlenratio}

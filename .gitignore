@@ -18,6 +18,7 @@ egs/*/*/mfcc
 egs/*/*/stft
 egs/*/*/enhan
 egs/*/*/wav*
+egs/*/*/*~
 
 # tools related
 src/utils/kaldi_io_py.py

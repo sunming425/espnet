@@ -131,7 +131,7 @@ class CustomConverter(object):
         ys = [kaldi_io_py.read_mat(b[1]['input'][0]['feat']) for b in batch]
 
         # remove empty sequence and get sort along with length
-        filtered_idx = filter(lambda i: len(xs[i]) > 0, range(len(ys)))
+        filtered_idx = filter(lambda i: len(xs[i]) > 0, range(len(xs)))
         sorted_idx = sorted(filtered_idx, key=lambda i: -len(xs[i]))
         xs = [np.fromiter(map(int, xs[i]), dtype=np.int64) for i in sorted_idx]
         ys = [ys[i] for i in sorted_idx]
@@ -165,6 +165,8 @@ class CustomConverter(object):
             spembs = [kaldi_io_py.read_vec_flt(b[1]['input'][1]['feat']) for b in batch]
             spembs = [spembs[i] for i in sorted_idx]
             spembs = torch.from_numpy(np.array(spembs)).float()
+
+            # TODO(kan-bayashi): need to be fixed in pytorch v4
             if torch_is_old:
                 spembs = Variable(spembs, volatile=not is_training)
             if sum(self.device) >= 0:
@@ -221,6 +223,7 @@ def make_batchset(data, batch_size, max_length_in, max_length_out,
         logging.info('# utts: ' + str(len(sorted_data)))
         # change batchsize depending on the input and output length
         while True:
+            # input and output are reversed due to the use of same json as asr
             ilen = int(sorted_data[start][1]['output'][0]['shape'][0])
             olen = int(sorted_data[start][1]['input'][0]['shape'][0])
             factor = max(int(ilen / max_length_in), int(olen / max_length_out))
@@ -241,6 +244,7 @@ def make_batchset(data, batch_size, max_length_in, max_length_out,
         logging.info('# utts: ' + str(len(sorted_data)))
         # change batchsize depending on the input and output length
         while True:
+            # input and output are reversed due to the use of same json as asr
             ilen = int(sorted_data[start][1]['output'][0]['shape'][0])
             olen = int(sorted_data[start][1]['input'][0]['shape'][0])
             factor = max(int(ilen / max_length_in), int(olen / max_length_out))
@@ -302,6 +306,10 @@ def train(args):
     # reverse input and output dimension
     idim = int(valid_json[utts[0]]['output'][0]['shape'][1])
     odim = int(valid_json[utts[0]]['input'][0]['shape'][1])
+    if args.use_speaker_embedding:
+        args.spk_embed_dim = int(valid_json[utts[0]]['input'][1]['shape'][0])
+    else:
+        args.spk_embed_dim = None
     logging.info('#input dims : ' + str(idim))
     logging.info('#output dims: ' + str(odim))
 
@@ -404,8 +412,8 @@ def train(args):
     valid_iter = chainer.iterators.SerialIterator(valid_batchset, 1, repeat=False, shuffle=False)
 
     # Set up a trainer
-    use_speaker_embedding = False if args.spk_embed_dim is None else True
-    converter = CustomConverter(gpu_id, use_speaker_embedding=use_speaker_embedding)
+    #use_speaker_embedding = False if args.spk_embed_dim is None else True
+    converter = CustomConverter(gpu_id, True, args.use_speaker_embedding)
     updater = CustomUpdater(model, args.grad_clip, train_iter, optimizer, converter)
     trainer = training.Trainer(updater, (args.epochs, 'epoch'), out=args.outdir)
 
@@ -428,7 +436,7 @@ def train(args):
                       key=lambda x: int(x[1]['input'][0]['shape'][1]), reverse=True)
         trainer.extend(PlotAttentionReport(
             tacotron2, data, args.outdir + '/att_ws',
-            CustomConverter(gpu_id, False, use_speaker_embedding), True), trigger=(1, 'epoch'))
+            CustomConverter(gpu_id, False, args.use_speaker_embedding), True), trigger=(1, 'epoch'))
 
     # Make a plot for training and validation values
     trainer.extend(extensions.PlotReport(['main/loss', 'validation/main/loss',
@@ -545,13 +553,21 @@ def decode(args):
         os.makedirs(outdir)
 
     # check the use of embedding
-    if not hasattr(train_args, "spk_embed_dim"):
-        use_speaker_embedding = False
-    else:
-        if train_args.spk_embed_dim is None:
-            use_speaker_embedding = False
+#    if not hasattr(train_args, "spk_embed_dim"):
+#        use_speaker_embedding = False
+#    else:
+#        if train_args.spk_embed_dim is None:
+#            use_speaker_embedding = False
+#        else:
+#            use_speaker_embedding = True
+    # TODO(kan-bayashi): need to remove in the future
+    if hasattr(train_args, "spk_embed_dim"):
+        if train_args.spk_embed_dim is not None:
+            train_args.use_speaker_embedding = True
         else:
-            use_speaker_embedding = True
+            train_args.use_speaker_embedding = False
+    else:
+        train_args.use_speaker_embedding = False
 
     # TODO(kan-bayashi): need to be fixed in pytorch v4
     if not torch_is_old:
@@ -572,7 +588,7 @@ def decode(args):
                 x = Variable(x, volatile=True)
 
             # get speaker embedding
-            if use_speaker_embedding:
+            if train_args.use_speaker_embedding:
                 spemb = kaldi_io_py.read_vec_flt(js[utt_id]['input'][1]['feat'])
                 spemb = torch.from_numpy(spemb)
                 # TODO(kan-bayashi): need to be fixed in pytorch v4
