@@ -62,6 +62,13 @@ if [ -f $data/feats.scp ]; then
   mv $data/feats.scp $data/.backup
 fi
 
+# temporarily filter out new babel .wav utterances with /user/bin/sox
+rm -rf ${data}_bkp
+cp -r $data ${data}_bkp
+cp $data/wav.scp $data/wav.scp.ori
+grep -v "/usr/bin/sox" $data/wav.scp.ori > $data/wav.scp
+utils/fix_data_dir.sh $data
+
 scp=$data/wav.scp
 segfile=$data/segments
 utils/validate_data_dir.sh --no-text --no-feats $data || exit 1;

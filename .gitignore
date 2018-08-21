@@ -19,6 +19,11 @@ egs/*/*/stft
 egs/*/*/enhan
 egs/*/*/wav*
 egs/*/*/*~
+egs/*/*/*/*~
+egs/*/old*
+egs/*/*/old*
+egs/*/*/log_*
+egs/*/tts1_*
 
 # tools related
 src/utils/kaldi_io_py.py

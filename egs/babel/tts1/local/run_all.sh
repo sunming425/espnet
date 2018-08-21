@@ -8,7 +8,7 @@ for x in 201-haitian 202-swahili 203-lao 204-tamil 205-kurmanji 206-zulu 207-tok
     lang=`echo $x | cut -f 2 -d"-"`
     echo $langid
     echo $lang
-#    ./setup_experiment.sh tts1_${lang}
+    ./setup_experiment.sh tts1_${lang}
     pushd ../tts1_${lang}
     ./run.sh --langs $langid --recog $langid --ngpu 1 |& tee log_run &
     sleep 20m # to avoid too many disk access happend at the same time

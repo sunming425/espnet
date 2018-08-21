@@ -76,7 +76,7 @@ bce_pos_weight=1.0
 
 
 # minibatch related
-batchsize=64
+batchsize=32
 batch_sort_key="output" # empty or input or output (if empty, shuffled batch will be used)
 maxlen_in=150     # if input length  > maxlen_in, batchsize is reduced (if batch_sort_key="", not effect)
 maxlen_out=400    # if output length > maxlen_out, batchsize is reduced (if batch_sort_key="", not effect)
@@ -88,7 +88,7 @@ eps=1e-6
 weight_decay=0.0
 dropout=0.5
 zoneout=0.1
-epochs=100
+epochs=30
 
 
 # decoding related
@@ -97,9 +97,6 @@ threshold=0.5 # threshold to stop the generation
 maxlenratio=10.0
 minlenratio=0.0
 
-# data filtering related
-maxframes=1200
-maxchars=200
 
 # exp tag
 tag="" # tag for managing experiments.
@@ -122,6 +119,8 @@ if [ ! -z $gpu ]; then
     fi
 fi
 
+# exp tag
+tag="" # tag for managing experiments.
 
 # data set
 # non-target languages: cantonese bengali pashto turkish vietnamese haitian tamil kurmanji tokpisin georgian
@@ -232,17 +231,22 @@ if [ ${stage} -le 1 ]; then
 
     if [ ! -z $subset_num_spk ]; then
         # create a trainng subset with ${subset_num_spk} speakers (in total 7470)
-        head -n $subset_num_spk <(utils/shuffle_list.pl data/tr_${exptag}_org/spk2utt | awk '{print $1}') > data/tr_${exptag}_org/spk_list_${subset_num_spk}spk
+        head -n $subset_num_spk <(utils/shuffle_list.pl data/tr_babel5_org/spk2utt | awk '{print $1}') > data/tr_babel5_org/spk_list_${subset_num_spk}spk
         utils/subset_data_dir.sh \
-        --spk-list data/tr_${exptag}_org/spk_list_${subset_num_spk}spk \
-        data/tr_${exptag}_org data/${train_set}_org
+        --spk-list data/tr_babel5_org/spk_list_${subset_num_spk}spk \
+        data/tr_babel5_org data/${train_set}_org
     fi
-    
+
     # remove utt having more than 3000 frames or less than 10 frames or
     # remove utt having more than 400 characters or no more than 0 characters
-    remove_longshortdata.sh --maxframes ${maxframes} --maxchars ${maxchars} data/${train_set}_org data/${train_set}
-    remove_longshortdata.sh --maxframes ${maxframes} --maxchars ${maxchars} data/${train_dev}_org data/${train_dev}
+    remove_longshortdata.sh --maxframes 1200 --maxchars 200 data/${train_set}_org data/${train_set}
+    remove_longshortdata.sh --maxframes 1200 --maxchars 200 data/${train_dev}_org data/${train_dev}
 
+    # rm -rf data/${train_set}
+    # cp -r data/${train_set}_org data/${train_set}
+    # rm -rf data/${train_dev}
+    # cp -r data/${train_dev}_org data/${train_dev}
+    
     # compute global CMVN
     compute-cmvn-stats scp:data/${train_set}/feats.scp data/${train_set}/cmvn.ark
     
@@ -438,7 +442,7 @@ if [ ${stage} -le 4 ]; then
 	--maxlen-out ${maxlen_out} \
 	--epochs ${epochs}
 fi
-exit
+
 
 outdir=${expdir}/outputs_${model}_th${threshold}_mlr${minlenratio}-${maxlenratio}
 if [ ${stage} -le 5 ];then

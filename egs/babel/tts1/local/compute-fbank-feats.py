@@ -8,6 +8,7 @@ import pdb
 import argparse
 import logging
 import os
+import sys
 
 import librosa
 import numpy as np
@@ -83,18 +84,29 @@ def main():
         for x in f.readlines():
             streamID = x.strip().split()[0]
             sphCmd = ' '.join(x.strip().split()[1:])
-            wavFile = sphCmd.split()[6].replace(".sph", ".wav")
-            wavCmd = sphCmd[:-1] + "> %s" % wavFile
+            if sphCmd.split()[1][-4:] == ".wav": # new babel wav with .wav
+                wavFile = sphCmd.split()[1]
+            elif sphCmd.split()[6][-4:] == ".sph": # old babel wav start from .sph
+                wavFile = sphCmd.split()[6].replace(".sph", ".wav")
+            else:
+                print "Error: parsing %s" % x
+                sys.exit()
+                
+            wavCmd = sphCmd[:-1] + "> %s" % wavFile            
             os.system(wavCmd)
             scp.append([streamID, wavFile])
+            print "x: %s" % x
+            print "wavFile: %s" % wavFile
+            print "wavCmd: %s" % wavCmd
+
     # check direcitory
     outdir = os.path.dirname(args.out)
     if len(outdir) != 0 and not os.path.exists(outdir):
         os.makedirs(outdir)
-
+    
     # write to ark and scp file (see https://github.com/vesis84/kaldi-io-for-python)
     arkscp = 'ark:| copy-feats --print-args=false ark:- ark,scp:%s.ark,%s.scp' % (args.out, args.out)
-
+    
     # extract feature and then write as ark with scp format
     with kaldi_io_py.open_or_fd(arkscp, 'wb') as f:
         for idx, (streamID, path) in enumerate(scp, 1):
